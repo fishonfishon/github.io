@@ -384,7 +384,7 @@
   </div>
 
   <footer>
-    Terrain: shallow shelf near shore, a steeper drop starting around 120ft out, holding 130–190ft deep through the 160–300ft band, then a second steep drop reaching 300ft+ by roughly 360ft out. Fish spawn relative to the ACTUAL water depth at their location, not a fixed absolute depth — a species that prefers "70–90% down" sits near 100ft where the bottom is 120ft, not off in some fixed deep zone. When fighting a hooked fish, reeling pulls it toward the surface first (it may breach with a splash near the top) rather than following the normal shore-ward swing. Haptics use the Vibration API, which only Android Chrome supports — iOS Safari has never implemented it on any version. iPhone testers instead get a screen-flash pulse in its place; a real iOS build will need native haptics (Core Haptics / UIFeedbackGenerator) to get true vibration.
+    Terrain is randomized fresh every time the page loads — shallow near shore, monotonically deeper heading out, with randomized plateaus and steep drops for a staircase-like seafloor rather than a smooth ramp, reaching up to 500ft by the far edge of the 400ft-wide map. Fish spawn relative to the ACTUAL water depth at their location, not a fixed absolute depth — a species that prefers "70–90% down" sits near the bottom 30% of whatever the local depth happens to be, wherever that is on this particular map. When fighting a hooked fish, reeling pulls it toward the surface first (it may breach with a splash near the top) rather than following the normal shore-ward swing. Haptics use the Vibration API, which only Android Chrome supports — iOS Safari has never implemented it on any version. iPhone testers instead get a screen-flash pulse in its place; a real iOS build will need native haptics (Core Haptics / UIFeedbackGenerator) to get true vibration.
   </footer>
 </div>
 
@@ -720,11 +720,41 @@
   window.addEventListener('resize', fitCanvas);
 
   const MAX_DIST_FT = 400; // map width, ft — wider than the 350ft cast cap so current drift has room
-  const MAX_DEPTH_FT = 325;
-  // Terrain shape unchanged (still %-of-distance based) — steeper drop near 30%,
-  // 130-190ft band across 40-75%, 300ft+ by ~90%. Only the real-world distance
-  // those percentages map to has grown, via MAX_DIST_FT above.
-  const TERRAIN = [[0,8],[10,14],[20,25],[30,95],[40,130],[55,160],[65,150],[75,190],[90,305],[100,325]];
+  const MAX_DEPTH_FT = 500;
+  // Generates a fresh seafloor profile every page load: shallow near shore,
+  // monotonically deeper heading out, with randomized plateaus and steep drops
+  // for a staircase-like character (rather than a straight ramp), ending near
+  // MAX_DEPTH_FT by 100%. Real shore-to-deep-water transects are essentially
+  // always monotonic, so this never generates a shallower patch further out
+  // than a point closer to shore.
+  function generateRandomTerrain(){
+    const startDepth = 5 + Math.random()*10; // 5-15ft right off the shore
+    const finalDepth = Math.round(MAX_DEPTH_FT*0.85 + Math.random()*MAX_DEPTH_FT*0.15); // 85-100% of cap
+    const numMid = 5 + Math.floor(Math.random()*3); // 5-7 interior breakpoints
+    let pcts = [];
+    for(let i=0;i<numMid;i++) pcts.push(5+Math.random()*90);
+    pcts.sort((a,b)=>a-b);
+    pcts = [...new Set(pcts.map(p=>Math.round(p)))].filter(p=>p>0 && p<100);
+    pcts = [0, ...pcts, 100];
+    // Randomized per-segment weight: some near-zero (plateau), some large
+    // (steep drop) — gives the staircase feel instead of a smooth ramp.
+    const weights = [];
+    for(let i=1;i<pcts.length;i++){
+      weights.push(Math.random()<0.3 ? Math.random()*0.3 : 0.5+Math.random()*1.5);
+    }
+    const totalWeight = weights.reduce((a,b)=>a+b,0) || 1;
+    const totalGain = finalDepth - startDepth;
+    const points = [[0, Math.round(startDepth)]];
+    let depth = startDepth;
+    for(let i=1;i<pcts.length;i++){
+      depth += totalGain * (weights[i-1]/totalWeight);
+      points.push([pcts[i], Math.round(Math.min(MAX_DEPTH_FT, depth))]);
+    }
+    points[points.length-1][0] = 100;
+    points[points.length-1][1] = Math.min(MAX_DEPTH_FT, points[points.length-1][1]);
+    return points;
+  }
+  const TERRAIN = generateRandomTerrain();
   function depthProfileFt(distFt){
     const pct = Math.max(0, Math.min(100, (distFt/MAX_DIST_FT)*100));
     for(let i=0;i<TERRAIN.length-1;i++){
@@ -750,8 +780,8 @@
     { name:'Chinook Salmon',         img:'chinook.png',         category:'salmon',    pctLow:0.70, pctHigh:0.90, absMin:100, absMax:400,  lureMin:2,    lureMax:5,   wMin:10,  wMax:125, chMin:0.0084, chMax:0.000024 },
     { name:'Chum Salmon',            img:'chum.png',            category:'salmon',    pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:200,  lureMin:1.5,  lureMax:5,   wMin:10,  wMax:35,  chMin:0.02,   chMax:0.00015 },
     { name:'Lingcod',                img:'lingcod.png',         category:'lingcod',   pctLow:0.80, pctHigh:1.00, absMin:15,  absMax:350,  lureMin:2,    lureMax:5,   wMin:5,   wMax:86,  chMin:0.015,  chMax:0.00005 },
-    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
-    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
+    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', photoScale:0.5, pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
+    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', photoScale:0.5, pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
     { name:'Copper Rockfish',        img:'copper.png',          category:'rockfish',  pctLow:0.40, pctHigh:1.00, absMin:30,  absMax:400,  lureMin:1,    lureMax:2,   wMin:1,   wMax:10,  chMin:0.012,  chMax:0.00015 },
     { name:'Quillback Rockfish',     img:'quillback.png',       category:'rockfish',  pctLow:0.60, pctHigh:1.00, absMin:60,  absMax:500,  lureMin:1.5,  lureMax:2.5, wMin:1,   wMax:7.5, chMin:0.009,  chMax:0.00008 },
     { name:'Black Rockfish',         img:'black.png',           category:'rockfish',  pctLow:0.50, pctHigh:1.00, absMin:20,  absMax:500,  lureMin:1,    lureMax:2,   wMin:1,   wMax:13,  chMin:0.016,  chMax:0.00012 },
@@ -1208,7 +1238,7 @@
 
   // ---------------- Current ----------------
   // direction: +1 = flowing outward (away from shore), -1 = flowing toward shore.
-  // Rerolls on every fresh load, and again every 30 minutes if the page stays open.
+  // Rerolls on every fresh load, and again every 5 minutes if the page stays open.
   let currentDirection = 1, currentSpeedFtPerSec = 0;
   let currentRolledOnce = false;
   function rollCurrent(){
@@ -1225,7 +1255,7 @@
     if(el) el.textContent = (currentDirection>0?'→':'←')+currentSpeedFtPerSec.toFixed(1);
   }
   rollCurrent();
-  setInterval(rollCurrent, 30*60*1000);
+  setInterval(rollCurrent, 5*60*1000);
 
   let distanceFt = 0, depthFt = 0, bottomDepthFt = depthProfileFt(0);
   let bailOpen = false, freeFalling = false, bottomed = false;
@@ -1568,7 +1598,7 @@
     ctx.fillStyle='#9c8768'; ctx.fill();
 
     ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.font='9px -apple-system,sans-serif'; ctx.fillStyle='rgba(255,255,255,0.3)';
-    [0,100,200,300].forEach(ftMark=>{
+    [0,100,200,300,400,500].forEach(ftMark=>{
       const y=surfaceY+(ftMark/MAX_DEPTH_FT)*(floorY-surfaceY);
       ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
       ctx.fillText(ftMark+'ft', 4, y-2);
@@ -1601,13 +1631,23 @@
       const cachedPre = hookedFish.revealed ? FISH_IMAGE_CACHE[hookedFish.name] : null;
       if(cachedPre && cachedPre.status==='loaded'){
         const source = cachedPre.processed ? cachedPre.canvas : cachedPre.rawImg;
-        const drawH = Math.max(13, Math.min(150, 13 + Math.sqrt(hookedFish.weight)*6.24)); // 13px small fish up to 150px for monsters
+        const speciesForScale = FISH_DATA.find(s=>s.name===hookedFish.name);
+        const scaleMult = (speciesForScale && speciesForScale.photoScale) || 1;
+        const drawH = Math.max(13, Math.min(150, 13 + Math.sqrt(hookedFish.weight)*6.24)) * scaleMult;
         const drawW = drawH * (cachedPre.w/cachedPre.h);
         hookedPhoto = { source, drawW, drawH };
-        const theta = fishFacingFlip ? -fishTiltAngle : fishTiltAngle;
-        const mouthLocalX = (fishFacingFlip ? 1 : -1) * drawW*0.44;
-        lineTargetX = lureX + mouthLocalX*Math.cos(theta);
-        lineTargetY = lureY + mouthLocalX*Math.sin(theta);
+        // Replicate the actual draw transform order (rotate, then flip, then
+        // translate) for the local mouth point. The old formula tried to fold
+        // the flip into a single cos/sin sign trick, which happened to work for
+        // X but silently broke Y — cos is even, sin is odd, so the same trick
+        // can't correctly handle both axes at once.
+        const rotAngle = fishFacingFlip ? -fishTiltAngle : fishTiltAngle;
+        const localMouthX = -drawW*0.44;
+        let mx = localMouthX*Math.cos(rotAngle);
+        let my = localMouthX*Math.sin(rotAngle);
+        if(fishFacingFlip) mx = -mx;
+        lineTargetX = lureX + mx;
+        lineTargetY = lureY + my;
       }
     }
 
