@@ -723,13 +723,16 @@
   const MAX_DEPTH_FT = 500;
   // Generates a fresh seafloor profile every page load: shallow near shore,
   // monotonically deeper heading out, with randomized plateaus and steep drops
-  // for a staircase-like character (rather than a straight ramp), ending near
-  // MAX_DEPTH_FT by 100%. Real shore-to-deep-water transects are essentially
+  // for a staircase-like character (rather than a straight ramp). Each map also
+  // rolls its own depth ceiling — some maps are shallow (bottoming around
+  // 100-200ft), others reach the full 500ft cap — rather than every map maxing
+  // out near the same depth. Real shore-to-deep-water transects are essentially
   // always monotonic, so this never generates a shallower patch further out
   // than a point closer to shore.
   function generateRandomTerrain(){
+    const mapDepthCeiling = 100 + Math.random()*(MAX_DEPTH_FT-100); // this map's own max, 100-500ft
     const startDepth = 5 + Math.random()*10; // 5-15ft right off the shore
-    const finalDepth = Math.round(MAX_DEPTH_FT*0.85 + Math.random()*MAX_DEPTH_FT*0.15); // 85-100% of cap
+    const finalDepth = Math.round(mapDepthCeiling*0.85 + Math.random()*mapDepthCeiling*0.15); // 85-100% of this map's ceiling
     const numMid = 5 + Math.floor(Math.random()*3); // 5-7 interior breakpoints
     let pcts = [];
     for(let i=0;i<numMid;i++) pcts.push(5+Math.random()*90);
@@ -755,6 +758,11 @@
     return points;
   }
   const TERRAIN = generateRandomTerrain();
+  // Rendering scale for THIS map: its own deepest point + 50ft of margin below
+  // it, not the fixed 500ft generation ceiling. A shallow map (say, bottoming
+  // at 150ft) now fills the canvas with actual water instead of mostly showing
+  // dead sand-fill below a terrain line that barely reaches down the screen.
+  const VIEW_DEPTH_FT = TERRAIN[TERRAIN.length-1][1] + 50;
   function depthProfileFt(distFt){
     const pct = Math.max(0, Math.min(100, (distFt/MAX_DIST_FT)*100));
     for(let i=0;i<TERRAIN.length-1;i++){
@@ -1589,20 +1597,21 @@
     ctx.fillStyle=g; ctx.fillRect(0,surfaceY,w,floorY-surfaceY);
 
     ctx.beginPath();
-    ctx.moveTo(0, surfaceY+(TERRAIN[0][1]/MAX_DEPTH_FT)*(floorY-surfaceY));
+    ctx.moveTo(0, surfaceY+(TERRAIN[0][1]/VIEW_DEPTH_FT)*(floorY-surfaceY));
     TERRAIN.forEach(([p,d])=>{
-      const x=w*(p/100), y=surfaceY+(d/MAX_DEPTH_FT)*(floorY-surfaceY);
+      const x=w*(p/100), y=surfaceY+(d/VIEW_DEPTH_FT)*(floorY-surfaceY);
       ctx.lineTo(x,y);
     });
     ctx.lineTo(w,floorY); ctx.lineTo(0,floorY); ctx.closePath();
     ctx.fillStyle='#9c8768'; ctx.fill();
 
     ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.font='9px -apple-system,sans-serif'; ctx.fillStyle='rgba(255,255,255,0.3)';
-    [0,100,200,300,400,500].forEach(ftMark=>{
-      const y=surfaceY+(ftMark/MAX_DEPTH_FT)*(floorY-surfaceY);
+    const gridStep = VIEW_DEPTH_FT<=150 ? 25 : (VIEW_DEPTH_FT<=300 ? 50 : 100);
+    for(let ftMark=0; ftMark<VIEW_DEPTH_FT; ftMark+=gridStep){
+      const y=surfaceY+(ftMark/VIEW_DEPTH_FT)*(floorY-surfaceY);
       ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
       ctx.fillText(ftMark+'ft', 4, y-2);
-    });
+    }
 
     // Ambient fish — decorative, placed within each species' real preferred band
     // AT ITS ACTUAL LOCATION (relative to the local terrain depth there), so
@@ -1610,7 +1619,7 @@
     const nowSec = performance.now()/1000;
     for(const f of AMBIENT_FISH){
       const fx = w*f.xFrac;
-      const fy = surfaceY + (f.depthFt/MAX_DEPTH_FT)*(floorY-surfaceY) + Math.sin(nowSec*f.bobSpeed+f.bobPhase)*3;
+      const fy = surfaceY + (f.depthFt/VIEW_DEPTH_FT)*(floorY-surfaceY) + Math.sin(nowSec*f.bobSpeed+f.bobPhase)*3;
       drawFishIcon(fx, fy, f.size, f.color, f.vx>0, null);
     }
 
@@ -1619,7 +1628,7 @@
     ctx.beginPath(); ctx.arc(anglerX,anglerY-8,4,0,Math.PI*2); ctx.fill();
 
     const lureX=w*(distanceFt/MAX_DIST_FT);
-    const lureY=surfaceY+(depthFt/MAX_DEPTH_FT)*(floorY-surfaceY);
+    const lureY=surfaceY+(depthFt/VIEW_DEPTH_FT)*(floorY-surfaceY);
 
     // If showing the real photo, work out its size/orientation up front so the
     // connecting line can attach to the fish's mouth rather than its center —
@@ -1664,7 +1673,7 @@
       const straightY = anglerY + (lineTargetY-anglerY)*f;
       const distAtX = Math.max(0, Math.min(MAX_DIST_FT, (x/w)*MAX_DIST_FT));
       const terrainDepthAtX = depthProfileFt(distAtX);
-      const terrainYAtX = surfaceY + (terrainDepthAtX/MAX_DEPTH_FT)*(floorY-surfaceY);
+      const terrainYAtX = surfaceY + (terrainDepthAtX/VIEW_DEPTH_FT)*(floorY-surfaceY);
       const y = Math.min(straightY, terrainYAtX - CLEARANCE_PX);
       ctx.lineTo(x, y);
     }
