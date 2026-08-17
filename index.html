@@ -507,11 +507,12 @@
         .catch(err=>{ buffers[path]='error'; loadErrors[path]=err && err.message ? err.message : String(err); updateDebugEl(); });
     }
     const FILES = {
-      cast:   ['sounds/cast.mp3'],
-      reel:   ['sounds/reel.mp3'],
-      fishOn: ['sounds/reel2.mp3'],
-      splash: ['sounds/splash1.mp3','sounds/splash2.mp3'],
-      ocean:  ['sounds/ocean1.mp3','sounds/ocean2.mp3','sounds/ocean3.mp3','sounds/ocean4.mp3']
+      cast:         ['sounds/cast.mp3'],
+      landingSplash:['sounds/splash3.mp3'],
+      fishOn:       ['sounds/reel2.mp3'],
+      splash:       ['sounds/splash1.mp3','sounds/splash2.mp3','sounds/splash3.mp3','sounds/splash4.mp3'],
+      lid:          ['sounds/lid.mp3'],
+      ocean:        ['sounds/ocean1.mp3','sounds/ocean2.mp3','sounds/ocean3.mp3','sounds/ocean4.mp3']
     };
     const ALL_PATHS = Object.values(FILES).flat();
     ALL_PATHS.forEach(loadFile);
@@ -586,6 +587,36 @@
       bgSource.connect(bgGain);
       bgSource.start();
     }
+    // Plays only the first or second half of a file — used for lid.mp3, where
+    // the opening sound is baked into the first half and closing into the second.
+    function playHalfClip(key, half){
+      if(sfxMuted || !ensureCtx()) return;
+      const variants = (FILES[key]||[]).filter(p=>buffers[p] && buffers[p]!=='loading' && buffers[p]!=='error');
+      if(!variants.length) return;
+      const buf = buffers[variants[0]];
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.connect(sfxGain);
+      const halfDur = buf.duration/2;
+      if(half==='first'){ src.start(ctx.currentTime, 0, halfDur); }
+      else { src.start(ctx.currentTime, halfDur, halfDur); }
+    }
+    let runAlertSource=null, runAlertTimeout=null;
+    function stopRunAlert(){
+      if(runAlertSource){ try{ runAlertSource.stop(); }catch(e){} runAlertSource=null; }
+      if(runAlertTimeout){ clearTimeout(runAlertTimeout); runAlertTimeout=null; }
+    }
+    function startRunAlert(){
+      if(runAlertSource || sfxMuted || !ensureCtx()) return;
+      const variants = (FILES.fishOn||[]).filter(p=>buffers[p] && buffers[p]!=='loading' && buffers[p]!=='error');
+      if(!variants.length) return; // no synth fallback for this one — it's an ongoing alert, not a one-shot
+      const src = ctx.createBufferSource();
+      src.buffer = buffers[variants[0]]; src.loop = true;
+      src.connect(sfxGain); src.start();
+      runAlertSource = src;
+      // If the player is unresponsive for 3-5s, stop — they may be away, or
+      // deliberately letting a big fish run on light/live-bait tackle.
+      runAlertTimeout = setTimeout(stopRunAlert, 3000+Math.random()*2000);
+    }
     let fishOnSource=null;
     function stopFishOnCue(){
       if(fishOnSource){ try{ fishOnSource.stop(); }catch(e){} fishOnSource=null; }
@@ -598,7 +629,7 @@
       isBgMuted(){ return bgMuted; },
       unlock(){ ensureCtx(); startBackground(); }, // call from any user gesture
       cast(){ playFileOrFallback('cast', ()=>{ noise(0.35,0.22,900,'bandpass'); tone(300,0.3,'sine',0.07,700); }); },
-      splash(){ noise(0.25,0.28,1800,'lowpass'); tone(180,0.15,'sine',0.09,90); }, // lure landing — no file assigned to this specific event
+      splash(){ playFileOrFallback('landingSplash', ()=>{ noise(0.25,0.28,1800,'lowpass'); tone(180,0.15,'sine',0.09,90); }); },
       fishSurfaceSplash(){ playFileOrFallback('splash', ()=>{ noise(0.25,0.28,1800,'lowpass'); tone(180,0.15,'sine',0.09,90); }); },
       reelClick(){
         const now=performance.now();
@@ -625,6 +656,10 @@
         }
       },
       stopFishOnCue, // called the moment the player starts reeling — cuts reel2.mp3 short instead of always playing to the end
+      lidOpen(){ playHalfClip('lid','first'); },
+      lidClose(){ playHalfClip('lid','second'); },
+      runAlertStart(){ startRunAlert(); }, // fish is running and the player isn't reeling — nag until they react or 3-5s pass
+      stopRunAlert,
       catchSuccess(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'triangle',0.13),i*100)); },
       lineSnap(){ noise(0.2,0.28,2500,'highpass'); tone(200,0.15,'sawtooth',0.11,40); },
       bottomThud(){ tone(70,0.18,'sine',0.18,45); },
@@ -1045,6 +1080,7 @@
   let hookedFish=null, fightHapticTimer=null;
   let fishRunning=false, fishRunUntil=0, fishRunDepthRate=0, lastRunHapticAt=0;
   let fishJumping=false, splashActive=false;
+  let jumpCount=0, maxJumpsThisFight=4, lowSpeedSince=null;
 
   function rollForStrike(){
     if(!castActive || hookedFish || depthFt<=0) return;
@@ -1105,11 +1141,18 @@
   function hookFish(species, weight){
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
+    jumpCount=0; maxJumpsThisFight = 4 + Math.round(Math.random()); // 4 or 5
+    lowSpeedSince=null;
+    // A strike always engages the bail, same as a real reel — otherwise the
+    // lure could still be mid-free-fall and hit bottom with a fish attached,
+    // triggering the bottom thud/haptic mid-fight, which is jarring.
+    bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
     const hapticMs = Math.min(600, Math.max(80, 80 + weight*8));
     window.fishOnHapticFlash(hapticMs);
     window.fishOnSound.fishOn();
     showFishOnBanner('FISH ON!!');
     setStatus(coachHookMessage(weight), 'ok');
+    updateBailVisual();
 
     clearInterval(fightHapticTimer);
     fightHapticTimer = setInterval(()=>{
@@ -1119,10 +1162,14 @@
   function predatorStrike(species, weight){
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
+    jumpCount=0; maxJumpsThisFight = 4 + Math.round(Math.random());
+    lowSpeedSince=null;
+    bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
     window.fishOnHapticFlash([50,40,50,40,50,40,110]);
     window.fishOnSound.fishOn();
     showFishOnBanner('YOUR CATCH HOOKED ON A BIGGER FISH!');
     setStatus(coachHookMessage(weight, true), 'ok');
+    updateBailVisual();
 
     clearInterval(fightHapticTimer);
     fightHapticTimer = setInterval(()=>{
@@ -1357,6 +1404,7 @@
   function breakLine(){
     window.fishOnHaptic([60,50,60,50,120]);
     window.fishOnSound.lineSnap();
+    window.fishOnSound.stopRunAlert();
     showCatchPopup(null, 'BROKEN LINE!', 'bad', 1600);
     setStatus(`Line snapped! That ${hookedFish.category} was too much for ${window.fishOnCastControl.lineStrength}lb test.`, 'bad');
     clearInterval(fightHapticTimer);
@@ -1371,6 +1419,7 @@
     const visual = species ? buildFishVisual(species, tier) : null;
     window.fishOnHaptic([30,40,30,40,30,40,90]);
     window.fishOnSound.catchSuccess();
+    window.fishOnSound.stopRunAlert();
     showCatchPopup(
       visual,
       `Caught: ${f.name}<div style="font-size:13px;color:#9fb0b0;font-weight:400;">${f.weight.toFixed(1)} lb · ${tier}</div>`,
@@ -1488,6 +1537,7 @@
   // permanently blocked the bail-hold-to-cast gesture until a full reel-to-shore.
   function fullReset(){
     clearInterval(fightHapticTimer);
+    window.fishOnSound.stopRunAlert();
     castActive=false; recastPending=false; distanceFt=0; depthFt=0;
     bottomDepthFt=depthProfileFt(0); bailOpen=false; freeFalling=false; bottomed=false;
     lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null;
@@ -1669,7 +1719,7 @@
           window.fishOnHaptic([50,30,50,30,90]); // strong "it's taking off!" cue
           lastRunHapticAt = performance.now();
         }
-        if(fishRunning && performance.now() > fishRunUntil) fishRunning = false;
+        if(fishRunning && performance.now() > fishRunUntil){ fishRunning = false; window.fishOnSound.stopRunAlert(); }
 
         if(fishRunning && performance.now()-lastRunHapticAt > 140){
           window.fishOnHaptic(55); // rapid, noticeably stronger buzz for the duration of the run
@@ -1694,7 +1744,21 @@
         bottomDepthFt = depthProfileFt(distanceFt);
         bottomed=false;
         lockedLineFt = Math.hypot(distanceFt, depthFt);
-        if(depthFt<8 && !fishJumping && !fishRunning) triggerFishJump();
+        if(depthFt<8 && !fishJumping && !fishRunning && reelSpeedFtPerSec>AGGRESSIVE_REEL_THRESHOLD && jumpCount<maxJumpsThisFight){
+          jumpCount++;
+          triggerFishJump();
+        }
+
+        // While the fish is actively running and the player has genuinely
+        // stopped reeling (not just a brief pause between crank strokes),
+        // nag with reel2.mp3 on loop until they react or 3-5s pass unanswered.
+        if(fishRunning && reelSpeedFtPerSec<=0.05){
+          if(lowSpeedSince===null) lowSpeedSince=performance.now();
+          if(performance.now()-lowSpeedSince>400) window.fishOnSound.runAlertStart();
+        } else {
+          lowSpeedSince=null;
+          window.fishOnSound.stopRunAlert();
+        }
       } else {
         // Closing the bail fixes line length. Gravity therefore changes the angle
         // of the line and pulls the lure shoreward instead of adding more line.
@@ -1910,8 +1974,22 @@
   }
 
   document.getElementById('iceboxWrap').addEventListener('click', ()=>{
-    document.getElementById('iceboxWrap').classList.toggle('open');
+    const wrap = document.getElementById('iceboxWrap');
+    const opening = !wrap.classList.contains('open');
+    wrap.classList.toggle('open');
+    if(opening) window.fishOnSound.lidOpen(); else window.fishOnSound.lidClose();
   });
+
+  // Browsers block audio entirely until a real user gesture — there's no way
+  // around that. This listens for the very FIRST interaction anywhere on the
+  // page (not just the bail hold or mute buttons) so background music starts
+  // as early as physically possible, without needing a specific tap on sound
+  // controls first.
+  function unlockAudioOnFirstInteraction(){
+    window.fishOnSound.unlock();
+    ['pointerdown','touchstart','click','keydown'].forEach(evt=>window.removeEventListener(evt, unlockAudioOnFirstInteraction));
+  }
+  ['pointerdown','touchstart','click','keydown'].forEach(evt=>window.addEventListener(evt, unlockAudioOnFirstInteraction));
 
   fitCanvas(); resetCast();
   requestAnimationFrame(tick);
