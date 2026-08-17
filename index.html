@@ -156,6 +156,16 @@
   #hapticFlash{position:fixed;inset:0;z-index:80;pointer-events:none;opacity:0;background:var(--accent);
     transition:opacity 0.08s ease-out;}
   #hapticFlash.pulse{transition:opacity 0.04s ease-out;}
+  #muteBgBtn, #muteSfxBtn{
+    position:fixed; top:8px; z-index:90;
+    width:34px; height:34px; border-radius:50%; border:1px solid var(--line);
+    background:rgba(20,30,32,0.85); color:var(--paper); font-size:15px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  }
+  #muteBgBtn{ right:48px; }
+  #muteSfxBtn{ right:8px; }
+  #muteBgBtn.muted, #muteSfxBtn.muted{ color:#7f8f8f; }
 @media (min-width: 640px){
   body{ overflow-y:auto; }
   #screenCast.wrap{
@@ -199,6 +209,8 @@
 <body>
 
 <div id="hapticFlash"></div>
+<button id="muteBgBtn" aria-label="Toggle background sound">🌊</button>
+<button id="muteSfxBtn" aria-label="Toggle sound effects">🔊</button>
 <div id="ipMotionBar">
   <button id="ipMotionBtn">Enable Motion &amp; Orientation Access</button>
   <p id="ipMotionNote">iPhone requires this tap before casting will detect your whip. Tap once, allow the popup, then you're set for the whole session.</p>
@@ -377,6 +389,7 @@
     <span id="rDbgSecure">secure: —</span>
     <span id="rDbgAccel">accel: 0.0</span>
     <span id="rDbgHaptic">vibrate: —</span>
+    <span id="soundDebug">sounds: loading…</span>
   </div>
 
   <div class="controls" id="reelControlsRow">
@@ -466,6 +479,176 @@
     hapticFlashTimer = setTimeout(()=>{ hapticFlashEl.style.opacity = 0; }, 70);
   };
 
+  // ---------------- Sound engine (Web Audio API, fully synthesized — no files) ----------------
+  window.fishOnSound = (function(){
+    let ctx=null, sfxGain=null, bgGain=null, sfxMuted=false, bgMuted=false;
+    let bgSource=null, bgStarted=false;
+    const buffers = {}; // filename -> AudioBuffer | 'error' | 'loading'
+    const loadErrors = {}; // filename -> error message, for diagnostics
+    function ensureCtx(){
+      if(!ctx){
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(!AC) return false;
+        ctx = new AC();
+        sfxGain = ctx.createGain(); sfxGain.gain.value = 0.22; sfxGain.connect(ctx.destination);
+        bgGain = ctx.createGain(); bgGain.gain.value = 0.05; bgGain.connect(ctx.destination); // background stays much quieter
+      }
+      if(ctx.state==='suspended') ctx.resume();
+      return true;
+    }
+    function loadFile(path){
+      if(buffers[path]) return;
+      buffers[path]='loading';
+      if(!ensureCtx()) return;
+      fetch(path)
+        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.arrayBuffer(); })
+        .then(ab=>ctx.decodeAudioData(ab))
+        .then(decoded=>{ buffers[path]=decoded; updateDebugEl(); })
+        .catch(err=>{ buffers[path]='error'; loadErrors[path]=err && err.message ? err.message : String(err); updateDebugEl(); });
+    }
+    const FILES = {
+      cast:   ['sounds/cast.mp3'],
+      reel:   ['sounds/reel.mp3'],
+      fishOn: ['sounds/reel2.mp3'],
+      splash: ['sounds/splash1.mp3','sounds/splash2.mp3'],
+      ocean:  ['sounds/ocean1.mp3','sounds/ocean2.mp3','sounds/ocean3.mp3','sounds/ocean4.mp3']
+    };
+    const ALL_PATHS = Object.values(FILES).flat();
+    ALL_PATHS.forEach(loadFile);
+    function updateDebugEl(){
+      const el=document.getElementById('soundDebug'); if(!el) return;
+      const loaded = ALL_PATHS.filter(p=>buffers[p] && buffers[p]!=='loading' && buffers[p]!=='error').length;
+      const errored = ALL_PATHS.filter(p=>buffers[p]==='error');
+      let msg = 'sounds: '+loaded+'/'+ALL_PATHS.length+' loaded';
+      if(location.protocol==='file:'){
+        msg += ' — page opened as a local file (file://); fetch() cannot load audio files this way, only a real server works';
+      } else if(errored.length){
+        msg += ' — failed: '+errored.map(p=>p.split('/').pop()+' ('+loadErrors[p]+')').join(', ');
+      }
+      el.textContent = msg;
+    }
+    updateDebugEl();
+    // Locks in one random ocean track for this whole session/map — matches the
+    // terrain, which is also freshly randomized every page load.
+    const chosenOceanFile = FILES.ocean[Math.floor(Math.random()*FILES.ocean.length)];
+
+    function noiseBuffer(dur){
+      const sr=ctx.sampleRate, buf=ctx.createBuffer(1, Math.max(1,Math.floor(sr*dur)), sr);
+      const d=buf.getChannelData(0);
+      for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+      return buf;
+    }
+    function tone(freq, dur, type, gainVal, freqEnd){
+      if(sfxMuted || !ensureCtx()) return;
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.type=type||'sine';
+      const t0=ctx.currentTime;
+      osc.frequency.setValueAtTime(freq, t0);
+      if(freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(1,freqEnd), t0+dur);
+      g.gain.setValueAtTime(gainVal, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+      osc.connect(g); g.connect(sfxGain);
+      osc.start(t0); osc.stop(t0+dur+0.02);
+    }
+    function noise(dur, gainVal, filterFreq, filterType){
+      if(sfxMuted || !ensureCtx()) return;
+      const src=ctx.createBufferSource(); src.buffer=noiseBuffer(dur);
+      const filt=ctx.createBiquadFilter(); filt.type=filterType||'bandpass'; filt.frequency.value=filterFreq||1200;
+      const g=ctx.createGain();
+      const t0=ctx.currentTime;
+      g.gain.setValueAtTime(gainVal, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+      src.connect(filt); filt.connect(g); g.connect(sfxGain);
+      src.start(t0); src.stop(t0+dur+0.02);
+    }
+    // Plays a real file if it's loaded (picking randomly among variants), else
+    // runs the synthesized fallback — same pattern as the fish-photo fallback.
+    function playFileOrFallback(key, fallbackFn){
+      if(sfxMuted || !ensureCtx()){ return; }
+      const variants = (FILES[key]||[]).filter(p=>buffers[p] && buffers[p]!=='loading' && buffers[p]!=='error');
+      if(variants.length){
+        const path = variants[Math.floor(Math.random()*variants.length)];
+        const src = ctx.createBufferSource();
+        src.buffer = buffers[path];
+        src.connect(sfxGain);
+        src.start();
+      } else {
+        fallbackFn();
+      }
+    }
+    function startBackground(){
+      if(bgStarted || !ensureCtx()) return;
+      const buf = buffers[chosenOceanFile];
+      if(!buf || buf==='loading' || buf==='error') return; // will retry on next unlock() call
+      bgStarted = true;
+      bgSource = ctx.createBufferSource();
+      bgSource.buffer = buf; bgSource.loop = true;
+      bgSource.connect(bgGain);
+      bgSource.start();
+    }
+    let fishOnSource=null;
+    function stopFishOnCue(){
+      if(fishOnSource){ try{ fishOnSource.stop(); }catch(e){} fishOnSource=null; }
+    }
+    let lastReelClickAt=0, nextReelClickGapMs=200;
+    return {
+      setSfxMuted(m){ sfxMuted=m; },
+      setBgMuted(m){ bgMuted=m; if(ensureCtx()) bgGain.gain.value = bgMuted?0:0.05; },
+      isSfxMuted(){ return sfxMuted; },
+      isBgMuted(){ return bgMuted; },
+      unlock(){ ensureCtx(); startBackground(); }, // call from any user gesture
+      cast(){ playFileOrFallback('cast', ()=>{ noise(0.35,0.22,900,'bandpass'); tone(300,0.3,'sine',0.07,700); }); },
+      splash(){ noise(0.25,0.28,1800,'lowpass'); tone(180,0.15,'sine',0.09,90); }, // lure landing — no file assigned to this specific event
+      fishSurfaceSplash(){ playFileOrFallback('splash', ()=>{ noise(0.25,0.28,1800,'lowpass'); tone(180,0.15,'sine',0.09,90); }); },
+      reelClick(){
+        const now=performance.now();
+        if(now-lastReelClickAt<nextReelClickGapMs) return;
+        lastReelClickAt=now;
+        nextReelClickGapMs = 150+Math.random()*180; // randomized cadence, not a metronome
+        noise(0.03,0.10,3000,'highpass'); // synth only — the reel.mp3 file is no longer used here
+      },
+      bailClick(){ noise(0.04,0.16,2200,'bandpass'); },
+      fishOn(){
+        if(sfxMuted || !ensureCtx()) return;
+        const variants = (FILES.fishOn||[]).filter(p=>buffers[p] && buffers[p]!=='loading' && buffers[p]!=='error');
+        stopFishOnCue(); // in case one is already mid-playback
+        if(variants.length){
+          const path = variants[Math.floor(Math.random()*variants.length)];
+          const src = ctx.createBufferSource();
+          src.buffer = buffers[path];
+          src.connect(sfxGain);
+          src.start();
+          fishOnSource = src;
+          src.onended = ()=>{ if(fishOnSource===src) fishOnSource=null; };
+        } else {
+          [440,554,659].forEach((f,i)=>setTimeout(()=>tone(f,0.18,'triangle',0.14),i*90));
+        }
+      },
+      stopFishOnCue, // called the moment the player starts reeling — cuts reel2.mp3 short instead of always playing to the end
+      catchSuccess(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.22,'triangle',0.13),i*100)); },
+      lineSnap(){ noise(0.2,0.28,2500,'highpass'); tone(200,0.15,'sawtooth',0.11,40); },
+      bottomThud(){ tone(70,0.18,'sine',0.18,45); },
+      jigPop(){ tone(500,0.08,'sine',0.11,750); }
+    };
+  })();
+
+  const muteBgBtn = document.getElementById('muteBgBtn');
+  const muteSfxBtn = document.getElementById('muteSfxBtn');
+  muteBgBtn.addEventListener('click', ()=>{
+    window.fishOnSound.unlock();
+    const nowMuted = !window.fishOnSound.isBgMuted();
+    window.fishOnSound.setBgMuted(nowMuted);
+    muteBgBtn.textContent = nowMuted ? '🚫' : '🌊';
+    muteBgBtn.classList.toggle('muted', nowMuted);
+  });
+  muteSfxBtn.addEventListener('click', ()=>{
+    window.fishOnSound.unlock();
+    const nowMuted = !window.fishOnSound.isSfxMuted();
+    window.fishOnSound.setSfxMuted(nowMuted);
+    muteSfxBtn.textContent = nowMuted ? '🔇' : '🔊';
+    muteSfxBtn.classList.toggle('muted', nowMuted);
+  });
+
   let rodLength=8, power='medium', action='fast', lineType='mono', lineStrength=10, lureOz=1, sensitivity='medium';
   window.fishOnCastControl.lineStrength = lineStrength;
   window.fishOnCastControl.sensitivity = sensitivity;
@@ -531,6 +714,7 @@
   };
 
   function doCast(p){
+    window.fishOnSound.cast();
     const forceF = p/ANCHOR_FORCE;
     const lenF = lengthFactor(rodLength);
     const powF = POWER_FACTOR[power];
@@ -923,6 +1107,7 @@
     fishRunning=false; fishRunUntil=0;
     const hapticMs = Math.min(600, Math.max(80, 80 + weight*8));
     window.fishOnHapticFlash(hapticMs);
+    window.fishOnSound.fishOn();
     showFishOnBanner('FISH ON!!');
     setStatus(coachHookMessage(weight), 'ok');
 
@@ -935,6 +1120,7 @@
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
     window.fishOnHapticFlash([50,40,50,40,50,40,110]);
+    window.fishOnSound.fishOn();
     showFishOnBanner('YOUR CATCH HOOKED ON A BIGGER FISH!');
     setStatus(coachHookMessage(weight, true), 'ok');
 
@@ -1170,6 +1356,7 @@
 
   function breakLine(){
     window.fishOnHaptic([60,50,60,50,120]);
+    window.fishOnSound.lineSnap();
     showCatchPopup(null, 'BROKEN LINE!', 'bad', 1600);
     setStatus(`Line snapped! That ${hookedFish.category} was too much for ${window.fishOnCastControl.lineStrength}lb test.`, 'bad');
     clearInterval(fightHapticTimer);
@@ -1183,6 +1370,7 @@
     const tier = species ? sizeTierFor(species, f.weight) : 'medium';
     const visual = species ? buildFishVisual(species, tier) : null;
     window.fishOnHaptic([30,40,30,40,30,40,90]);
+    window.fishOnSound.catchSuccess();
     showCatchPopup(
       visual,
       `Caught: ${f.name}<div style="font-size:13px;color:#9fb0b0;font-weight:400;">${f.weight.toFixed(1)} lb · ${tier}</div>`,
@@ -1237,6 +1425,7 @@
   function triggerFishJump(){
     fishJumping=true; splashActive=true;
     window.fishOnHapticFlash([20,20,20,70]);
+    window.fishOnSound.fishSurfaceSplash();
     const cat = hookedFish ? hookedFish.category : 'fish';
     setStatus(`It's a ${cat}!`, 'ok');
     if(hookedFish) hookedFish.revealed = true;
@@ -1311,6 +1500,7 @@
   window.startReelPhase = function(distFt, oz){
     castActive=true; recastPending=false; distanceFt = distFt; lureOz = oz;
     hookedFish=null; clearInterval(fightHapticTimer);
+    window.fishOnSound.splash();
     transferInfo.textContent = 'Cast distance: '+distFt.toFixed(0)+'ft · Lure: '+oz+'oz';
     resetCast();
     bailOpen=true; freeFalling=true;
@@ -1352,9 +1542,11 @@
       }, 4000);
     } else if(bailOpen){
       bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
+      window.fishOnSound.bailClick();
       setStatus('Bail closed. As the lure sinks, the fixed line will pull it toward shore.', '');
     } else {
       bailOpen=true; freeFalling=true; lockedLineFt=null; reelSpeedFtPerSec=0;
+      window.fishOnSound.bailClick();
       setStatus('Bail open — lure free-spooling straight down.', '');
     }
     updateBailVisual(); updateReadouts();
@@ -1399,6 +1591,8 @@
     dialRotor.style.transform = 'rotate('+wheelRotationRad+'rad)';
     if(d>0){
       reelSpeedFtPerSec = Math.min(10, (d/dt)*RETRIEVE_FT_PER_RAD);
+      window.fishOnSound.reelClick();
+      window.fishOnSound.stopFishOnCue();
       if(bailOpen || freeFalling){ bailOpen=false; freeFalling=false; updateBailVisual(); setStatus('Reeling — bail auto-closed.',''); }
     }
     wheelLastAngle=a; wheelLastTs=now;
@@ -1426,6 +1620,7 @@
     jigPopping = true; freeFalling = false; bottomed = false;
     setStatus('Jig! Lure popped up and toward shore, now falling again.', '');
     window.fishOnHaptic(15);
+    window.fishOnSound.jigPop();
     function animatePop(ts){
       const t = Math.min(1, (ts-startTs)/DUR_MS);
       const ease = 1-Math.pow(1-t,3);
@@ -1530,7 +1725,7 @@
         bottomed = newDepth >= bottomDepthFt - 0.5;
         depthFt = newDepth;
         if(bottomed && !wasBottomed){
-          window.fishOnHaptic(40);
+          window.fishOnHaptic(40); window.fishOnSound.bottomThud();
           setStatus('Bottom! Felt it at '+depthFt.toFixed(0)+'ft. Try jigging — with the bail closed, flick your phone up like setting the hook.', 'ok');
         }
       }
@@ -1564,7 +1759,7 @@
       bottomDepthFt = depthProfileFt(distanceFt);
       if(depthFt>=bottomDepthFt){
         depthFt=bottomDepthFt; bottomed=true; freeFalling=false;
-        window.fishOnHaptic(40);
+        window.fishOnHaptic(40); window.fishOnSound.bottomThud();
         setStatus('Bottom! Felt it at '+depthFt.toFixed(0)+'ft. Close the bail, then flick your phone up to jig — or start reeling.', 'ok');
       }
     }
