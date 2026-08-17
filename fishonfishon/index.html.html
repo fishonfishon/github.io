@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cast + Reel Prototype</title>
+<style>
+  :root{
+    --sky-top:#7d97a3; --sky-bottom:#c7d3d3;
+    --water-far:#3c5b68; --water-near:#294a56;
+    --sand:#b9a480; --sand-dark:#9c8768;
+    --ink:#1f2b2e; --paper:#eef1ee;
+    --accent:#d0703c; --ok:#4f8f6d; --bad:#b4483f;
+    --line:rgba(255,255,255,0.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--paper);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}
+  .wrap{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--line);}
+  header h1{margin:0;font-size:14px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;}
+  header p{margin:4px 0 0;font-size:12px;color:#b8c2c2;line-height:1.4;}
+
+  .panel{padding:10px 16px;border-bottom:1px solid var(--line);}
+  .row{display:flex;gap:8px;margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  .field{flex:1;min-width:0;}
+  .field-label{font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:#8fa0a0;margin-bottom:5px;display:flex;justify-content:space-between;}
+  .icebox-item{flex:0 0 auto;width:52px;background:rgba(255,255,255,0.05);border:1px solid var(--line);border-radius:8px;padding:4px 2px 3px;cursor:pointer;color:var(--paper);}
+  .icebox-item .lbl{font-size:9px;color:#9fb0b0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .icebox-wrap{margin:14px 16px;cursor:pointer;user-select:none;}
+  .icebox-scene{perspective:900px;}
+  .icebox-lid{
+    height:52px;background:linear-gradient(180deg,#4a7a90,#254050);
+    border:2px solid #16262e;border-bottom:none;border-radius:10px 10px 0 0;
+    position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    transform-origin:top center;transform-style:preserve-3d;
+    transition:transform 0.45s cubic-bezier(.3,0,.2,1);
+    box-shadow:0 3px 10px rgba(0,0,0,0.35);z-index:3;
+  }
+  .icebox-lid .handle{width:48px;height:9px;border-radius:5px;background:rgba(0,0,0,0.3);margin-bottom:5px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.35);}
+  .icebox-lid .label{color:#eef1ee;font-weight:900;letter-spacing:0.06em;font-size:13px;text-shadow:0 1px 2px rgba(0,0,0,0.3);}
+  .icebox-lid .label span{font-weight:600;font-size:10.5px;color:#bcd8dc;letter-spacing:0;margin-left:4px;}
+  .icebox-wrap.open .icebox-lid{transform:rotateX(-125deg);}
+  .icebox-latch{position:absolute;bottom:-6px;width:16px;height:11px;background:#16262e;border-radius:2px;box-shadow:0 2px 3px rgba(0,0,0,0.3);}
+  .icebox-latch.left{left:20px;} .icebox-latch.right{right:20px;}
+  .icebox-body{
+    background:linear-gradient(180deg,#c9dade,#aec4c8);
+    border:2px solid #16262e;border-top:none;border-radius:0 0 10px 10px;
+    max-height:0;overflow:hidden;transition:max-height 0.4s ease;
+    box-shadow:inset 0 3px 6px rgba(0,0,0,0.15);
+  }
+  .icebox-wrap.open .icebox-body{max-height:280px;}
+  .icebox-list{max-height:280px;overflow-y:auto;}
+  .icebox-list-item{
+    display:flex;align-items:center;gap:10px;padding:9px 12px;
+    border-bottom:1px solid rgba(0,0,0,0.09);cursor:pointer;color:#1c2b2e;
+  }
+  .icebox-list-item:active{background:rgba(0,0,0,0.06);}
+  .icebox-list-item .thumb{width:42px;height:42px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+  .icebox-list-item .info .name{font-weight:700;font-size:12.5px;}
+  .icebox-list-item .info .wt{font-size:11px;color:#3f5153;margin-top:1px;}
+  #iceboxEmpty{padding:16px 12px;font-size:11.5px;color:#4a5c5e;text-align:center;}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .seg button{flex:1;background:transparent;border:none;color:#c7d0d0;font-size:11.5px;padding:8px 2px;cursor:pointer;border-right:1px solid var(--line);}
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--accent);color:#1a1210;font-weight:700;}
+  select{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:#26312f;color:var(--paper);font-size:13px;}
+  input[type=range]{width:100%;}
+
+  canvas{display:block;width:100%;height:auto;}
+
+  .meter-row{padding:10px 16px 0;}
+  .meter-label{display:flex;justify-content:space-between;font-size:11px;color:#9fb0b0;margin-bottom:4px;}
+  .meter{height:10px;border-radius:6px;background:rgba(255,255,255,0.08);overflow:hidden;border:1px solid var(--line);}
+  .meter-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--ok),var(--accent),var(--bad));transition:width 0.03s linear;}
+
+  .status{margin:10px 16px 0;height:58px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid var(--line);font-size:13px;line-height:1.45;overflow:hidden;}
+  .status.ok{border-color:var(--ok);}
+  .status.bad{border-color:var(--bad);}
+
+  .breakdown{margin:10px 16px 0;padding:10px 12px;border-radius:10px;border:1px dashed var(--line);font-size:11.5px;font-family:'SF Mono',Menlo,monospace;color:#b8c2c2;display:none;}
+  .breakdown.show{display:block;}
+  .breakdown div{display:flex;justify-content:space-between;padding:2px 0;}
+  .breakdown div.total{border-top:1px solid var(--line);margin-top:4px;padding-top:5px;color:var(--paper);font-weight:700;}
+
+  .controls{padding:14px 16px 6px;display:flex;gap:10px;}
+  .controls button{flex:1;padding:13px;border-radius:10px;border:none;font-size:13px;font-weight:700;cursor:pointer;}
+  .btn-accent{background:var(--accent);color:#1a1210;}
+  .btn-ghost{background:transparent;color:var(--paper);border:1px solid var(--line);}
+  .btn-ok{background:var(--ok);color:#0f1a14;}
+
+  .sim-panel{margin:0 16px 10px;padding:10px 12px;border-radius:10px;border:1px dashed var(--line);display:none;}
+  .sim-panel.show{display:block;}
+  .sim-panel label{font-size:11px;color:#9fb0b0;display:block;margin-bottom:6px;}
+
+  .debug{margin:0 16px 10px;font-size:10px;color:#6f8080;font-family:'SF Mono',Menlo,monospace;display:flex;flex-wrap:wrap;gap:4px 14px;}
+  footer{margin-top:auto;padding:12px 16px 20px;font-size:11px;color:#7f8f8f;line-height:1.5;border-top:1px solid var(--line);}
+
+  #goReelBtn{display:none;}
+
+  .transfer-badge{margin:10px 16px 0;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid var(--line);font-size:12px;color:#b8c2c2;display:flex;justify-content:space-between;}
+
+  .readouts{display:flex;gap:8px;margin:10px 16px 0;font-size:11px;}
+  .ro{flex:1;padding:8px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid var(--line);text-align:center;}
+  .ro .v{font-size:15px;font-weight:700;color:var(--paper);}
+  .ro .l{color:#8fa0a0;font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;}
+
+  .rig-area{display:flex;align-items:center;justify-content:center;gap:18px;padding:14px;}
+  #reelBailBtn{width:140px;height:76px;background:transparent;border:none;cursor:pointer;padding:0;}
+  #reelWheel{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #384b48, #1a2422 70%);border:3px solid #47605c;position:relative;touch-action:none;}
+  #reelWheel .dial-rotor{position:absolute;inset:0;transform-origin:50% 50%;}
+  #reelWheel .dial-rotor::after{content:'';position:absolute;top:8px;left:50%;width:4px;height:20px;background:var(--accent);transform:translateX(-50%);border-radius:2px;}
+  .wheel-label{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#9fb0b0;pointer-events:none;}
+
+  /* Fix 3: only the underwater side-profile view is shown; the top cast-flight canvas is hidden */
+  #scene, .meter-row { display:none; }
+
+  #fishOnBanner{
+    position:fixed; top:0; left:0; width:100%; z-index:60;
+    background:linear-gradient(90deg,#b4483f,#d0703c,#b4483f);
+    color:#fff; text-align:center; font-size:26px; font-weight:900; letter-spacing:0.05em;
+    padding:18px 14px; text-shadow:0 2px 6px rgba(0,0,0,0.4);
+    transform:translateY(-100%); transition:transform 0.18s ease-out;
+    box-shadow:0 4px 18px rgba(0,0,0,0.4); line-height:1.25;
+  }
+  #fishOnBanner.show{ transform:translateY(0); }
+  #fishOnBanner.long{ font-size:18px; letter-spacing:0.02em; }
+
+  #catchPopup{
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.9);
+    background:#1a2422; border:2px solid var(--ok); color:var(--paper);
+    padding:16px 20px; border-radius:14px; font-size:15px; font-weight:700;
+    opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:55; text-align:center;
+    min-width:220px; max-width:88vw; line-height:1.4; white-space:pre-line;
+  }
+  #catchPopup.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+  #catchPopup.bad{ border-color:var(--bad); }
+  #catchPopup.enlarged{ padding:24px 28px; min-width:280px; }
+
+  #ipMotionBar{display:none;position:sticky;top:0;left:0;right:0;z-index:70;background:#2a1f14;border-bottom:2px solid var(--accent);padding:10px 16px;text-align:center;}
+  #ipMotionBar.show{display:block;}
+  #ipMotionBtn{width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#1a1210;font-weight:800;font-size:13.5px;cursor:pointer;}
+  #ipMotionBtn.granted{background:var(--ok);color:#0f1a14;}
+  #ipMotionBtn.failed{background:var(--bad);color:#fff;}
+  #ipMotionBar p{margin:6px 0 0;font-size:11px;color:#d8c2af;line-height:1.4;}
+
+  #hapticFlash{position:fixed;inset:0;z-index:80;pointer-events:none;opacity:0;background:var(--accent);
+    transition:opacity 0.08s ease-out;}
+  #hapticFlash.pulse{transition:opacity 0.04s ease-out;}
+</style>
+</head>
+<body>
+
+<div id="hapticFlash"></div>
+<div id="ipMotionBar">
+  <button id="ipMotionBtn">Enable Motion &amp; Orientation Access</button>
+  <p id="ipMotionNote">iPhone requires this tap before casting will detect your whip. Tap once, allow the popup, then you're set for the whole session.</p>
+</div>
+
+<!-- ======================= SCREEN 1: CASTING ======================= -->
+<div class="wrap" id="screenCast">
+  <header>
+    <h1>Cast Formula — Prototype v2</h1>
+    <p>Full gear matrix. No backlash, no force ceiling — whip as hard as you want. Distance is capped at 350ft and driven entirely by how well your setup matches the swing.</p>
+  </header>
+
+  <div class="panel">
+    <div class="row">
+      <div class="field">
+        <div class="field-label"><span>Rod length</span><span id="lenVal">8 ft</span></div>
+        <input type="range" id="lenSlider" min="6" max="11" step="1" value="8">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <div class="field-label">Rod power</div>
+        <div class="seg" id="powerSeg">
+          <button data-val="light">L</button>
+          <button data-val="lm">LM</button>
+          <button data-val="medium" class="active">M</button>
+          <button data-val="mh">MH</button>
+          <button data-val="heavy">H</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <div class="field-label">Rod action</div>
+        <div class="seg" id="actionSeg">
+          <button data-val="fast" class="active">Fast</button>
+          <button data-val="moderate">Moderate</button>
+          <button data-val="slow">Slow</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <div class="field-label">Line type</div>
+        <div class="seg" id="lineTypeSeg">
+          <button data-val="mono" class="active">Mono</button>
+          <button data-val="braid">Braid</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Line test</div>
+        <select id="lineStrength">
+          <option value="10">10 lb</option>
+          <option value="15">15 lb</option>
+          <option value="20">20 lb</option>
+          <option value="25">25 lb</option>
+          <option value="30">30 lb</option>
+          <option value="40">40 lb</option>
+          <option value="50">50 lb</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <div class="field-label">Lure weight</div>
+        <select id="lureWeight">
+          <option value="0.25">0.25 oz</option>
+          <option value="0.5">0.5 oz</option>
+          <option value="0.75">0.75 oz</option>
+          <option value="1" selected>1 oz</option>
+          <option value="1.5">1.5 oz</option>
+          <option value="2">2 oz</option>
+          <option value="2.5">2.5 oz</option>
+          <option value="3">3 oz</option>
+          <option value="4">4 oz</option>
+          <option value="5">5 oz</option>
+          <option value="7">7 oz</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Jig Sensitivity</div>
+        <div class="seg" id="sensSeg">
+          <button data-val="high">High</button>
+          <button data-val="medium" class="active">Med</button>
+          <button data-val="low">Low</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="scene" width="520" height="260"></canvas>
+
+  <div class="meter-row">
+    <div class="meter-label"><span>Swing force</span><span id="peakReadout">0.0 m/s²</span></div>
+    <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+  </div>
+
+  <div class="status" id="status">Set your gear, enable motion, and whip the phone forward like a real cast.</div>
+  <div class="breakdown" id="breakdown"></div>
+  <button id="goReelBtn">Reel It In →</button>
+
+  <div class="debug">
+    <span id="dbgEvents">devicemotion events: 0</span>
+    <span id="dbgSecure">secure context: —</span>
+  </div>
+
+  <div class="controls">
+    <button id="simBtn" class="btn-ghost" style="flex:1;">Auto Cast</button>
+  </div>
+  <div class="sim-panel" id="simPanel">
+    <label>Simulated swing force: <span id="simVal">60</span> m/s²</label>
+    <input type="range" id="simSlider" min="0" max="180" value="60">
+    <button id="simCast" class="btn-ok" style="width:100%;margin-top:8px;">Simulate Cast</button>
+  </div>
+
+  <footer>
+    Hold the bail button below, wind up, whip forward, and release — however hard you were swinging at the moment you let go is what the cast uses. No timing window, no penalty for releasing late.
+  </footer>
+</div>
+
+<!-- ======================= SCREEN 2: REELING ======================= -->
+<div class="wrap" id="screenReel">
+  <header>
+    <h1>Spinning Reel &amp; Lure</h1>
+    <p>Hold the bail button, wind up, whip forward, and release to cast — whatever peak force you hit while holding is what counts. After the cast, press it to close the bail and reel. Flick the phone up with the bail closed to jig.</p>
+  </header>
+
+  <div class="transfer-badge">
+    <span id="rTransferInfo">Set your gear, then hold the bail to cast.</span>
+  </div>
+
+  <canvas id="reelScene" width="520" height="260"></canvas>
+
+  <div class="readouts">
+    <div class="ro"><div class="v" id="roDepth">8 ft</div><div class="l">Depth</div></div>
+    <div class="ro"><div class="v" id="roDist">0 ft</div><div class="l">To Shore</div></div>
+    <div class="ro"><div class="v" id="roBail">Closed</div><div class="l">Bail</div></div>
+    <div class="ro"><div class="v" id="roCurrent">→0.0</div><div class="l">Current ft/s</div></div>
+  </div>
+
+  <div class="status" id="reelStatus">Bail closed. Hold the arc button while you wind up to prepare a cast.</div>
+
+  <div class="rig-area">
+    <button id="reelBailBtn" aria-label="Toggle bail">
+      <svg viewBox="0 0 140 70" width="140" height="70">
+        <path d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="#47605c" stroke-width="10" stroke-linecap="round"/>
+        <path id="reelBailFill" d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 300"/>
+        <text x="70" y="35" fill="#c7d0d0" font-size="11" text-anchor="middle" id="reelBailLabel">HOLD: CAST</text>
+      </svg>
+    </button>
+  </div>
+  <div class="rig-area" style="padding-top:0;">
+    <div id="reelWheel"><div class="dial-rotor" id="dialRotor"></div><div class="wheel-label">reel wheel</div></div>
+  </div>
+
+  <div class="icebox-wrap" id="iceboxWrap">
+    <div class="icebox-scene">
+      <div class="icebox-lid" id="iceboxLid">
+        <div class="handle"></div>
+        <div class="label">FISH ICEBOX <span id="iceboxCount">(0)</span></div>
+        <div class="icebox-latch left"></div>
+        <div class="icebox-latch right"></div>
+      </div>
+      <div class="icebox-body">
+        <div class="icebox-list" id="iceboxRow"></div>
+        <div id="iceboxEmpty">Nothing caught yet this session.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="debug">
+    <span id="rDbgEvents">devicemotion: 0</span>
+    <span id="rDbgSecure">secure: —</span>
+    <span id="rDbgAccel">accel: 0.0</span>
+    <span id="rDbgHaptic">vibrate: —</span>
+  </div>
+
+  <div class="controls">
+    <button id="reelResetBtn" class="btn-ghost" style="flex:1;">Reset to Landing</button>
+  </div>
+
+  <footer>
+    Terrain: shallow shelf near shore, a steeper drop starting around 120ft out, holding 130–190ft deep through the 160–300ft band, then a second steep drop reaching 300ft+ by roughly 360ft out. Fish spawn relative to the ACTUAL water depth at their location, not a fixed absolute depth — a species that prefers "70–90% down" sits near 100ft where the bottom is 120ft, not off in some fixed deep zone. When fighting a hooked fish, reeling pulls it toward the surface first (it may breach with a splash near the top) rather than following the normal shore-ward swing. Haptics use the Vibration API, which only Android Chrome supports — iOS Safari has never implemented it on any version. iPhone testers instead get a screen-flash pulse in its place; a real iOS build will need native haptics (Core Haptics / UIFeedbackGenerator) to get true vibration.
+  </footer>
+</div>
+
+<div id="fishOnBanner">FISH ON!!</div>
+<div id="catchPopup"></div>
+
+<script>
+// ======================= CASTING SCRIPT (unchanged mechanic) =======================
+(function(){
+  const canvas = document.getElementById('scene');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.min(window.devicePixelRatio||1, 2);
+  function fitCanvas(){
+    const cssW = canvas.clientWidth || 520, cssH = 260;
+    canvas.width = cssW*DPR; canvas.height = cssH*DPR;
+    canvas.style.height = cssH+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', fitCanvas);
+
+  const POWER_FACTOR = { light:1.00, lm:1.00, medium:1.00, mh:1.00, heavy:1.00 };
+  const ACTION_FACTOR = { fast:1.00, moderate:0.85, slow:0.70 };
+  const STRENGTHS = [10,15,20,25,30,40,50];
+  const MONO_FACTOR  = [1.00,0.95,0.90,0.85,0.80,0.70,0.60];
+  const BRAID_FACTOR = [1.15,1.12,1.09,1.06,1.03,0.97,0.91];
+  const LURE_SWEET = {
+    light:  [0.25, 0.5], lm: [0.5, 0.75], medium: [0.75, 1.5], mh: [1.5, 2.5], heavy: [2.0, 7.0]
+  };
+  const ANCHOR_FORCE = 90; // was 150 — real whips were landing well under that
+  const MAX_DIST = 350; // ft, hard cast-distance cap
+
+  function lengthFactor(ft){ return 0.75 + (ft-6)/5*0.5; }
+  function lineFactor(type, lb){
+    const i = STRENGTHS.indexOf(lb);
+    return (type==='braid' ? BRAID_FACTOR : MONO_FACTOR)[i];
+  }
+  function lureFactorFor(power, oz){
+    const [lo,hi] = LURE_SWEET[power];
+    if(oz>=lo && oz<=hi) return 1.0;
+    if(oz<lo){ const d = lo-oz; return Math.max(0.55, 1 - d*0.5); }
+    const d = oz-hi;
+    return Math.max(0.06, 1 - d*d*0.35);
+  }
+  function recommendedLine(oz){ return 8 + oz*9; }
+  function lineLureFrictionFactor(lineStrength, oz){
+    const ratio = lineStrength / recommendedLine(oz);
+    if(ratio <= 1.4) return 1.0;
+    return Math.max(0.4, 1 - (ratio-1.4)*0.4);
+  }
+  function checkLineSnap(lineStrength, oz, peakForce){
+    const ratio = lineStrength / recommendedLine(oz);
+    if(ratio >= 0.7) return false;
+    const snapThreshold = ANCHOR_FORCE * ratio * 1.1;
+    return peakForce > snapThreshold;
+  }
+
+  window.fishOnCastControl = { bailHeld:false };
+  window.fishOnIsCastActive = function(){ return false; }; // overwritten by the reel script once it initializes
+
+  // Universal feedback helper: real vibration where the platform supports it
+  // (Android Chrome), plus a visible screen-flash pulse everywhere — iOS Safari
+  // has no Vibration API at all (never has, on any version, in any browser there),
+  // so the flash is the only feedback signal iPhone testers get.
+  const hapticFlashEl = document.getElementById('hapticFlash');
+  let hapticFlashTimer=null;
+  // Quiet by default — real vibration where supported, no screen flash. Flashing
+  // on every bottom-contact/jig/etc was too distracting; reserved for the two
+  // moments that deserve a visual beat: a fish striking, and a fish breaching.
+  window.fishOnHaptic = function(pattern){
+    if(navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} }
+  };
+  window.fishOnHapticFlash = function(pattern){
+    if(navigator.vibrate){ try{ navigator.vibrate(pattern); }catch(e){} }
+    const totalMs = Array.isArray(pattern) ? pattern.reduce((a,b)=>a+b,0) : pattern;
+    const peakOpacity = Math.min(0.32, 0.1 + totalMs/1200);
+    clearTimeout(hapticFlashTimer);
+    hapticFlashEl.classList.add('pulse');
+    hapticFlashEl.style.opacity = peakOpacity;
+    hapticFlashTimer = setTimeout(()=>{ hapticFlashEl.style.opacity = 0; }, 70);
+  };
+
+  let rodLength=8, power='medium', action='fast', lineType='mono', lineStrength=10, lureOz=1, sensitivity='medium';
+  window.fishOnCastControl.lineStrength = lineStrength;
+  window.fishOnCastControl.sensitivity = sensitivity;
+
+  const lenSlider=document.getElementById('lenSlider'), lenVal=document.getElementById('lenVal');
+  lenSlider.addEventListener('input', ()=>{ rodLength=parseInt(lenSlider.value); lenVal.textContent=rodLength+' ft'; });
+
+  function wireSeg(id, setter){
+    document.getElementById(id).addEventListener('click', e=>{
+      const b=e.target.closest('button'); if(!b) return;
+      document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active'); setter(b.dataset.val);
+    });
+  }
+  wireSeg('powerSeg', v=>power=v);
+  wireSeg('actionSeg', v=>action=v);
+  wireSeg('lineTypeSeg', v=>lineType=v);
+  wireSeg('sensSeg', v=>{ sensitivity=v; window.fishOnCastControl.sensitivity=v; });
+  document.getElementById('lineStrength').addEventListener('change', e=>{ lineStrength=parseInt(e.target.value); window.fishOnCastControl.lineStrength=lineStrength; });
+  document.getElementById('lureWeight').addEventListener('change', e=>lureOz=parseFloat(e.target.value));
+
+  const statusEl=document.getElementById('status');
+  const breakdownEl=document.getElementById('breakdown');
+  const peakReadout=document.getElementById('peakReadout');
+  const meterFill=document.getElementById('meterFill');
+  const goReelBtn=document.getElementById('goReelBtn');
+
+  let casting=false; // true while a cast (or its flight animation) is resolving
+  let armed=false;   // true while the bail is held and we're tracking peak force
+  let peak=0;
+  let recentSamples=[]; // {t, mag} — trailing window so a load-up spike ages out before release
+  const RELEASE_WINDOW_MS = 400;
+  let lure={x:0.06,y:0,flying:false,dur:0,from:0.06,to:0.06,_start:null};
+  let lastCastDistance=null;
+
+  function handleAccelSample(mag){
+    const pct=Math.max(0,Math.min(100,(mag/ANCHOR_FORCE)*100));
+    meterFill.style.width=pct+'%';
+    if(armed){
+      const now=performance.now();
+      recentSamples.push({t:now, mag});
+      const cutoff=now-RELEASE_WINDOW_MS;
+      while(recentSamples.length && recentSamples[0].t<cutoff) recentSamples.shift();
+      peak=0; for(const s of recentSamples){ if(s.mag>peak) peak=s.mag; }
+      peakReadout.textContent=peak.toFixed(1)+' m/s²';
+    }
+  }
+
+  // Hold the bail, whip the phone, release to cast. Peak force is measured only
+  // over the trailing ~400ms before release — so winding/loading up first (which
+  // often spikes harder than people expect) doesn't lock in the distance before
+  // the actual forward whip even happens. Whatever you did right before letting
+  // go is what counts.
+  window.fishOnArmCast = function(){
+    if(casting || window.fishOnIsCastActive()) return;
+    armed=true; peak=0; recentSamples=[];
+    peakReadout.textContent='0.0 m/s²';
+  };
+  window.fishOnReleaseCast = function(){
+    if(!armed) return;
+    armed=false;
+    if(peak>4){ casting=true; doCast(peak); }
+  };
+
+  function doCast(p){
+    const forceF = p/ANCHOR_FORCE;
+    const lenF = lengthFactor(rodLength);
+    const powF = POWER_FACTOR[power];
+    const actF = ACTION_FACTOR[action];
+    const lineF = lineFactor(lineType, lineStrength) * lineLureFrictionFactor(lineStrength, lureOz);
+    const lureF = lureFactorFor(power, lureOz);
+    const raw = MAX_DIST * forceF * lenF * powF * actF * lineF * lureF;
+    const dist = Math.max(0, Math.min(MAX_DIST, raw));
+
+    breakdownEl.className='breakdown show';
+    breakdownEl.innerHTML =
+      row('Swing force', p.toFixed(1)+' m/s²', 'x'+forceF.toFixed(2)) +
+      row('Rod length', rodLength+' ft', 'x'+lenF.toFixed(2)) +
+      row('Power × action', power+' / '+action, 'x'+(powF*actF).toFixed(2)) +
+      row('Line (type/friction)', lineType+' '+lineStrength+'lb', 'x'+lineF.toFixed(2)) +
+      row('Lure weight', lureOz+' oz', 'x'+lureF.toFixed(2)) +
+      '<div class="total"><span>Distance</span><span>'+dist.toFixed(0)+' ft</span></div>';
+
+    animateCast(dist);
+  }
+  function row(label,val,factor){ return '<div><span>'+label+' ('+val+')</span><span>'+factor+'</span></div>'; }
+
+  function animateLineSnap(p){
+    lure.snapped = true; lure.flying = false; drawScene();
+    goReelBtn.style.display='none';
+    const rec = recommendedLine(lureOz).toFixed(0);
+    breakdownEl.className='breakdown show';
+    breakdownEl.innerHTML = '<div><span>Line vs lure</span><span>UNDERRATED</span></div>' +
+      '<div><span>'+lineStrength+'lb line, '+lureOz+'oz lure</span><span>needs ~'+rec+'lb+</span></div>' +
+      '<div class="total"><span>Result</span><span>LINE SNAPPED</span></div>';
+    statusEl.textContent = `Line snapped! A ${lureOz}oz lure on ${lineStrength}lb test can't survive that hard a release — the shock load broke it. Step up to around ${rec}lb+ for this lure, or ease off the whip.`;
+    statusEl.className='status bad';
+    setTimeout(()=>{ lure.snapped=false; casting=false; }, 1200);
+  }
+
+  function animateCast(distMeters){
+    lure.snapped=false;
+    lure.from=0.06; lure.to=0.08+(distMeters/MAX_DIST)*0.86;
+    lure.flying=true; lure.dur=(700+distMeters*3)*1.3; lure._start=null;
+    requestAnimationFrame(()=>animLoop(()=>{
+      statusEl.textContent = distMeters<20
+        ? `Short cast — only ${distMeters.toFixed(0)}ft. Gear mismatch or weak swing is costing you distance — check the breakdown above.`
+        : distMeters>380
+          ? `Excellent — ${distMeters.toFixed(0)}ft, right at the edge of realistic range.`
+          : `${distMeters.toFixed(0)}ft out.`;
+      statusEl.className='status ok';
+      lastCastDistance = distMeters;
+      window.startReelPhase(distMeters, lureOz);
+      casting=false;
+    }));
+  }
+  function animLoop(onDone){
+    function frame(ts){
+      if(!lure._start) lure._start=ts;
+      const el=ts-lure._start, f=Math.min(1, el/lure.dur), ease=1-Math.pow(1-f,2);
+      lure.x = lure.from+(lure.to-lure.from)*ease;
+      lure.y = -Math.sin(f*Math.PI)*0.2*(lure.to-lure.from>0.15?1:0.5);
+      drawScene();
+      if(f<1) requestAnimationFrame(frame);
+      else { lure.flying=false; lure.y=0; drawScene(); onDone(); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function drawScene(){
+    const w=canvas.clientWidth||520, h=260;
+    const horizon=h*0.32, shoreline=h*0.6;
+    let g=ctx.createLinearGradient(0,0,0,horizon); g.addColorStop(0,'#7d97a3'); g.addColorStop(1,'#c7d3d3');
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,horizon);
+    g=ctx.createLinearGradient(0,horizon,0,shoreline); g.addColorStop(0,'#3c5b68'); g.addColorStop(1,'#294a56');
+    ctx.fillStyle=g; ctx.fillRect(0,horizon,w,shoreline-horizon);
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
+    for(let i=0;i<5;i++){ const y=horizon+(shoreline-horizon)*(i+1)/6+Math.sin(Date.now()/700+i)*1.5;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    g=ctx.createLinearGradient(0,shoreline,0,h); g.addColorStop(0,'#b9a480'); g.addColorStop(1,'#9c8768');
+    ctx.fillStyle=g; ctx.fillRect(0,shoreline,w,h-shoreline);
+
+    const anglerX=w*0.06, anglerY=shoreline+10;
+    ctx.fillStyle='#2a231c';
+    ctx.beginPath(); ctx.arc(anglerX,anglerY-14,5,0,Math.PI*2); ctx.fill();
+    ctx.fillRect(anglerX-2,anglerY-9,4,16);
+
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='9px -apple-system,sans-serif';
+    [100,200,300].forEach(m=>{
+      const x = w*(0.08+(m/MAX_DIST)*0.86);
+      ctx.fillRect(x,shoreline-4,1,8);
+      ctx.fillText(m+'ft', x-8, shoreline+15);
+    });
+
+    if(lure.snapped){
+      ctx.strokeStyle='#b4483f'; ctx.lineWidth=1.5;
+      const cx=anglerX+8, cy=anglerY-24;
+      ctx.beginPath();
+      for(let i=0;i<6;i++){ const ang=(i/6)*Math.PI*2+i, r=5+(i%3)*2;
+        ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(ang)*r, cy+Math.sin(ang)*r); }
+      ctx.stroke();
+      ctx.fillStyle='#b4483f'; ctx.font='bold 12px -apple-system,sans-serif';
+      ctx.fillText('SNAPPED', anglerX+16, anglerY-24);
+    } else {
+      const properX=w*lure.x, properY=shoreline-6+lure.y*h;
+      ctx.beginPath(); ctx.moveTo(anglerX,anglerY-14); ctx.lineTo(properX,properY);
+      ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle='#d0703c'; ctx.beginPath(); ctx.arc(properX,properY,4,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  fitCanvas(); drawScene();
+  setInterval(()=>{ if(!casting) drawScene(); }, 250);
+
+  let motionActive=false, eventCount=0;
+  const dbgEvents=document.getElementById('dbgEvents'), dbgSecure=document.getElementById('dbgSecure');
+  dbgSecure.textContent='secure context: '+(window.isSecureContext?'yes':'NO — motion will not work');
+  window.fishOnIsMotionActive = function(){ return motionActive; };
+
+  function startMotion(){
+    if(motionActive) return;
+    window.addEventListener('devicemotion', e=>{
+      eventCount++; dbgEvents.textContent='devicemotion events: '+eventCount;
+      const a=(e.acceleration && e.acceleration.x!==null) ? e.acceleration : e.accelerationIncludingGravity;
+      if(!a) return;
+      const x=a.x||0,y=a.y||0,z=a.z||0;
+      let mag=Math.sqrt(x*x+y*y+z*z);
+      if(!e.acceleration || e.acceleration.x===null) mag=Math.max(0, mag-9.8);
+      handleAccelSample(mag);
+    });
+    motionActive=true;
+    statusEl.textContent='Motion sensors live. Whip the phone forward like a rod cast.';
+    statusEl.className='status';
+  }
+  // Exposed for both the top-of-page iPhone button and the bail-hold gesture to
+  // call directly — either is a valid direct user gesture for requestPermission().
+  // Returns 'granted' | 'denied' | 'unavailable' | 'already' so callers can react.
+  window.fishOnEnableCastMotion = async function(){
+    if(motionActive) return 'already';
+    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+      try{
+        const res=await DeviceMotionEvent.requestPermission();
+        if(res==='granted'){ startMotion(); return 'granted'; }
+        statusEl.textContent='Motion permission denied — use "Auto Cast" instead.'; statusEl.className='status';
+        return 'denied';
+      }catch(err){ statusEl.textContent='Permission error: '+err.message; return 'denied'; }
+    } else if(window.DeviceMotionEvent){ startMotion(); return 'granted'; }
+    statusEl.textContent='No motion API here — use "Auto Cast" below.';
+    return 'unavailable';
+  };
+
+  const simBtn=document.getElementById('simBtn'), simPanel=document.getElementById('simPanel');
+  const simSlider=document.getElementById('simSlider'), simVal=document.getElementById('simVal'), simCastBtn=document.getElementById('simCast');
+  simBtn.addEventListener('click', ()=>simPanel.classList.toggle('show'));
+  simSlider.addEventListener('input', ()=>simVal.textContent=simSlider.value);
+  simCastBtn.addEventListener('click', ()=>{
+    if(casting || window.fishOnIsCastActive()) return;
+    const p=parseFloat(simSlider.value);
+    peakReadout.textContent=p.toFixed(1)+' m/s²';
+    meterFill.style.width=Math.min(100,(p/ANCHOR_FORCE)*100)+'%';
+    casting=true; doCast(p);
+  });
+
+  // Casting now enters the reeling state automatically when the lure lands.
+})();
+
+// ======================= REELING SCRIPT =======================
+(function(){
+  // Keep casting and reeling on one continuous screen instead of switching views.
+  const castScreen=document.getElementById('screenCast');
+  const reelScreen=document.getElementById('screenReel');
+  const castFooter=castScreen.querySelector('footer');
+  [
+    reelScreen.querySelector('.transfer-badge'),
+    document.getElementById('reelScene'),
+    reelScreen.querySelector('.readouts'),
+    document.getElementById('reelStatus'),
+    document.getElementById('reelBailBtn').closest('.rig-area'),
+    document.getElementById('reelWheel').closest('.rig-area'),
+    document.getElementById('iceboxWrap'),
+    document.getElementById('rDbgEvents').closest('.debug'),
+    document.getElementById('reelResetBtn').closest('.controls')
+  ].forEach(node=>castScreen.insertBefore(node, castFooter));
+  reelScreen.style.display='none';
+  const canvas=document.getElementById('reelScene'), ctx=canvas.getContext('2d');
+  const DPR=Math.min(window.devicePixelRatio||1,2);
+  function fitCanvas(){
+    const w=canvas.clientWidth||520, h=260;
+    canvas.width=w*DPR; canvas.height=h*DPR; canvas.style.height=h+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', fitCanvas);
+
+  const MAX_DIST_FT = 400; // map width, ft — wider than the 350ft cast cap so current drift has room
+  const MAX_DEPTH_FT = 325;
+  // Terrain shape unchanged (still %-of-distance based) — steeper drop near 30%,
+  // 130-190ft band across 40-75%, 300ft+ by ~90%. Only the real-world distance
+  // those percentages map to has grown, via MAX_DIST_FT above.
+  const TERRAIN = [[0,8],[10,14],[20,25],[30,95],[40,130],[55,160],[65,150],[75,190],[90,305],[100,325]];
+  function depthProfileFt(distFt){
+    const pct = Math.max(0, Math.min(100, (distFt/MAX_DIST_FT)*100));
+    for(let i=0;i<TERRAIN.length-1;i++){
+      const [p0,d0]=TERRAIN[i], [p1,d1]=TERRAIN[i+1];
+      if(pct>=p0 && pct<=p1){ const f=(pct-p0)/(p1-p0); return d0+(d1-d0)*f; }
+    }
+    return MAX_DEPTH_FT;
+  }
+  function sinkRateFtPerSec(oz){ return 1.6 + oz*2.8; }
+
+  // ---------------- Fish data (from FishOn_Data_Set.xlsx) ----------------
+  // pctLow/pctHigh = "preferred depth %" applied to the LOCAL water depth at the
+  // fish's actual location (not a fixed absolute band) — a rockfish at a spot
+  // where the bottom is 120ft down sits near 120ft, not off in some fixed deep
+  // zone regardless of where it actually is. absMin/absMax are the species' own
+  // outer bounds, used only to clamp the local math (e.g. a fish still won't
+  // appear shallower than its real minimum even if the percentage math suggests
+  // it, and a deep specialist like halibut still won't show up in 20ft of water
+  // just because 90% of 20ft is a small number).
+  const FISH_DATA = [
+    { name:'Coho Salmon',            img:'coho.png',            category:'salmon',    pctLow:0.10, pctHigh:0.50, absMin:1,   absMax:300,  lureMin:1,    lureMax:3,   wMin:4,   wMax:35,  chMin:0.02,   chMax:0.0001 },
+    { name:'Pink Salmon',            img:'pink.png',            category:'salmon',    pctLow:0.10, pctHigh:0.35, absMin:1,   absMax:250,  lureMin:1,    lureMax:3,   wMin:3,   wMax:15,  chMin:0.035,  chMax:0.00035 },
+    { name:'Chinook Salmon',         img:'chinook.png',         category:'salmon',    pctLow:0.70, pctHigh:0.90, absMin:100, absMax:400,  lureMin:2,    lureMax:5,   wMin:10,  wMax:125, chMin:0.0084, chMax:0.000024 },
+    { name:'Chum Salmon',            img:'chum.png',            category:'salmon',    pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:200,  lureMin:1.5,  lureMax:5,   wMin:10,  wMax:35,  chMin:0.02,   chMax:0.00015 },
+    { name:'Lingcod',                img:'lingcod.png',         category:'lingcod',   pctLow:0.80, pctHigh:1.00, absMin:15,  absMax:350,  lureMin:2,    lureMax:5,   wMin:5,   wMax:86,  chMin:0.015,  chMax:0.00005 },
+    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
+    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
+    { name:'Copper Rockfish',        img:'copper.png',          category:'rockfish',  pctLow:0.40, pctHigh:1.00, absMin:30,  absMax:400,  lureMin:1,    lureMax:2,   wMin:1,   wMax:10,  chMin:0.012,  chMax:0.00015 },
+    { name:'Quillback Rockfish',     img:'quillback.png',       category:'rockfish',  pctLow:0.60, pctHigh:1.00, absMin:60,  absMax:500,  lureMin:1.5,  lureMax:2.5, wMin:1,   wMax:7.5, chMin:0.009,  chMax:0.00008 },
+    { name:'Black Rockfish',         img:'black.png',           category:'rockfish',  pctLow:0.50, pctHigh:1.00, absMin:20,  absMax:500,  lureMin:1,    lureMax:2,   wMin:1,   wMax:13,  chMin:0.016,  chMax:0.00012 },
+    { name:'Starry Flounder',        img:'flounder.png',        category:'flounder',  pctLow:0.85, pctHigh:1.00, absMin:1,   absMax:800,  lureMin:1.5,  lureMax:7,   wMin:1,   wMax:20,  chMin:0.04,   chMax:0.00016 },
+    { name:'Sole',                   img:'sole.png',            category:'sole',      pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:800,  lureMin:0.5,  lureMax:2,   wMin:0.5, wMax:8,   chMin:0.024,  chMax:0.00024 },
+    { name:'Sea-Run Cutthroat',      img:'cutthroat.png',       category:'trout',     pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:50,   lureMin:0.25, lureMax:1,   wMin:1,   wMax:7,   chMin:0.015,  chMax:0.0025 },
+    { name:'Halibut',                img:'halibut.png',         category:'halibut',   pctLow:0.90, pctHigh:1.00, absMin:250, absMax:1000, lureMin:3,    lureMax:7,   wMin:15,  wMax:482, chMin:0.0002, chMax:0.0000001 },
+    { name:'Squid',                  img:'squid.png',           category:'squid',     pctLow:0.60, pctHigh:0.85, absMin:15,  absMax:1000, lureMin:0.25, lureMax:2,   wMin:0.1, wMax:15,  chMin:0.02,   chMax:0.0002 },
+    { name:'Dogfish',                img:'dogfish.png',         category:'dogfish',   pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:1000, lureMin:1.5,  lureMax:7,   wMin:2,   wMax:20,  chMin:0.002,  chMax:0.000025 }
+  ];
+  function lerp(a,b,f){ return a+(b-a)*f; }
+  // The band a species actually occupies AT A GIVEN LOCATION, given that spot's
+  // real water depth. Returns null if the water isn't deep enough there at all.
+  function localBand(species, terrainDepthHere){
+    const lo = Math.max(species.absMin, terrainDepthHere*species.pctLow);
+    const hi = Math.min(species.absMax, terrainDepthHere*species.pctHigh);
+    return lo<=hi ? [lo,hi] : null;
+  }
+
+  // ---------------- Ambient fish (visual only, decorative) ----------------
+  const FISH_COLORS = ['#7fa8b0','#c9925a','#8fae6e','#b0806f','#a5967a','#6f9aa3','#c2a15a','#87977a','#9a7fae','#7fae9a','#ae7f8f','#8aa0c9','#c98a8a','#9ac98a','#c9b56a','#7a8fae'];
+  function placementForSpecies(sp){
+    for(let tries=0; tries<30; tries++){
+      const xFrac = 0.06 + Math.random()*0.92;
+      const D = depthProfileFt(xFrac*MAX_DIST_FT);
+      const band = localBand(sp, D);
+      if(band){ return { xFrac, depthFt: band[0]+Math.random()*(band[1]-band[0]) }; }
+    }
+    return null;
+  }
+  const AMBIENT_FISH = [];
+  const AMBIENT_COUNT = 8; // was 12, reduced ~30%
+  for(let i=0;i<AMBIENT_COUNT;i++){
+    let idx = i % FISH_DATA.length, sp = FISH_DATA[idx], placement = placementForSpecies(sp), attempts=0;
+    while(!placement && attempts<FISH_DATA.length){
+      idx = (idx+1) % FISH_DATA.length; sp = FISH_DATA[idx]; placement = placementForSpecies(sp); attempts++;
+    }
+    if(!placement) continue;
+    AMBIENT_FISH.push({
+      species: sp, depthFt: placement.depthFt, xFrac: placement.xFrac,
+      vx: (Math.random()<0.5?-1:1)*(0.005+Math.random()*0.008),
+      bobPhase: Math.random()*Math.PI*2, bobSpeed: 1+Math.random(),
+      size: 5+Math.random()*4, color: FISH_COLORS[idx % FISH_COLORS.length]
+    });
+  }
+  function updateAmbientFish(dt){
+    for(const f of AMBIENT_FISH){
+      f.xFrac += f.vx*dt;
+      if(f.xFrac<0.04 || f.xFrac>0.98){ f.vx=-f.vx; f.xFrac=Math.max(0.04,Math.min(0.98,f.xFrac)); }
+    }
+  }
+  function drawFishIcon(x, y, size, color, facingRight, outline){
+    ctx.save();
+    ctx.translate(x,y);
+    if(!facingRight) ctx.scale(-1,1);
+    ctx.fillStyle=color;
+    if(outline){ ctx.strokeStyle=outline; ctx.lineWidth=1.2; }
+    ctx.beginPath(); ctx.ellipse(0,0,size,size*0.55,0,0,Math.PI*2); ctx.fill();
+    if(outline) ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-size*0.85,0); ctx.lineTo(-size*1.6,-size*0.55); ctx.lineTo(-size*1.6,size*0.55);
+    ctx.closePath(); ctx.fill();
+    if(outline) ctx.stroke();
+    ctx.fillStyle='rgba(20,20,20,0.7)';
+    ctx.beginPath(); ctx.arc(size*0.45,-size*0.12,Math.max(0.8,size*0.12),0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  let hookedFish=null, fightHapticTimer=null;
+  let fishRunning=false, fishRunUntil=0, fishRunDepthRate=0, lastRunHapticAt=0;
+  let fishJumping=false, splashActive=false;
+
+  function rollForStrike(){
+    if(!castActive || hookedFish || depthFt<=0) return;
+    const localTerrainDepth = depthProfileFt(distanceFt);
+    const eligible = FISH_DATA.filter(f=>{
+      if(lureOz<f.lureMin || lureOz>f.lureMax) return false;
+      const band = localBand(f, localTerrainDepth);
+      return band && depthFt>=band[0] && depthFt<=band[1];
+    });
+    for(const f of eligible){
+      const weight = f.wMin + Math.random()*(f.wMax-f.wMin); // linear distribution min→max
+      const frac = (weight-f.wMin)/Math.max(0.0001,(f.wMax-f.wMin));
+      const chance = lerp(f.chMin, f.chMax, frac);
+      if(Math.random() < chance){
+        hookFish(f, weight);
+        break;
+      }
+    }
+  }
+  setInterval(rollForStrike, 1000);
+
+  // Bonus mechanic: while a (non-predator) fish is hooked in 200ft of water or
+  // shallower, a genuinely large dogfish, halibut, or lingcod can strike the
+  // hooked fish and take over the fight entirely. Uses the same in-game catch
+  // chance from the dataset, but the rolled weight is biased into the upper
+  // half of that predator's range — this only happens for LARGE specimens.
+  const PREDATOR_SPECIES = ['Lingcod','Halibut','Dogfish'];
+  function rollForPredatorAttack(){
+    if(!hookedFish || PREDATOR_SPECIES.includes(hookedFish.name) || depthFt>200) return;
+    const localTerrainDepth = depthProfileFt(distanceFt);
+    for(const predName of PREDATOR_SPECIES){
+      const sp = FISH_DATA.find(f=>f.name===predName);
+      if(!sp) continue;
+      const band = localBand(sp, localTerrainDepth);
+      if(!band || depthFt<band[0] || depthFt>band[1]) continue;
+      const weight = sp.wMin + (sp.wMax-sp.wMin)*(0.5 + Math.random()*0.5); // biased large
+      const frac = (weight-sp.wMin)/Math.max(0.0001,(sp.wMax-sp.wMin));
+      const chance = lerp(sp.chMin, sp.chMax, frac);
+      if(Math.random() < chance){
+        predatorStrike(sp, weight);
+        break;
+      }
+    }
+  }
+  setInterval(rollForPredatorAttack, 1000);
+
+  // Line test = outward pulling capacity, not a hard fish-weight cap. A fish up
+  // to 1x the rating is totally safe regardless of technique. Up to 3x is
+  // landable with skill (easing off while the fish runs). Beyond that, risk
+  // climbs fast even with good technique. Aggressive reeling specifically DURING
+  // an active run is what actually stresses the line — calm reeling stays safe
+  // even on a heavily over-matched fish.
+  const AGGRESSIVE_REEL_THRESHOLD = 2.0; // ft/s
+  function lineOverRatio(lineTestLb, fishWeightLb){
+    return Math.max(0, (fishWeightLb - lineTestLb) / (lineTestLb*2)); // 0 at 1x, 1 at 3x, keeps climbing beyond
+  }
+
+  function hookFish(species, weight){
+    hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
+    fishRunning=false; fishRunUntil=0;
+    const hapticMs = Math.min(600, Math.max(80, 80 + weight*8));
+    window.fishOnHapticFlash(hapticMs);
+    showFishOnBanner('FISH ON!!');
+    setStatus(`Fish on! Something's pulling hard.`, 'ok');
+
+    clearInterval(fightHapticTimer);
+    fightHapticTimer = setInterval(()=>{
+      if(hookedFish && reelSpeedFtPerSec>0.05) window.fishOnHaptic(35);
+    }, 450);
+  }
+  function predatorStrike(species, weight){
+    hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
+    fishRunning=false; fishRunUntil=0;
+    window.fishOnHapticFlash([50,40,50,40,50,40,110]);
+    showFishOnBanner('YOUR CATCH HOOKED ON A BIGGER FISH!');
+    setStatus(`Something huge just hit your line! Play it carefully.`, 'ok');
+
+    clearInterval(fightHapticTimer);
+    fightHapticTimer = setInterval(()=>{
+      if(hookedFish && reelSpeedFtPerSec>0.05) window.fishOnHaptic(35);
+    }, 450);
+  }
+  function showFishOnBanner(text){
+    const el=document.getElementById('fishOnBanner');
+    const msg = text || 'FISH ON!!';
+    el.textContent = msg;
+    el.classList.toggle('long', msg.length>14);
+    el.classList.add('show');
+    setTimeout(()=>el.classList.remove('show'), 1000);
+  }
+  function showCatchPopup(visualNode, textHtml, cls, ms){
+    const el=document.getElementById('catchPopup');
+    el.innerHTML='';
+    if(visualNode) el.appendChild(visualNode);
+    const textDiv=document.createElement('div');
+    textDiv.innerHTML=textHtml;
+    textDiv.style.marginTop = visualNode ? '10px' : '0';
+    el.appendChild(textDiv);
+    el.className='show'+(cls?(' '+cls):'');
+    setTimeout(()=>el.classList.remove('show'), ms||1600);
+  }
+  const TIER_PX = { small: 90, medium: 130, large: 170 };
+  // Prefers the processed (white-bg-stripped) cached image; falls back to the
+  // raw file directly if the cache hasn't finished loading yet, and to the
+  // built-in SVG silhouette if the image is missing entirely — never a broken
+  // image icon. `scale` lets a caller (e.g. the icebox review popup) size the
+  // image up independently of the standard catch-popup size.
+  function buildFishVisual(species, tier, scale){
+    const sizePx = TIER_PX[tier] * (scale || 1);
+    const container = document.createElement('div');
+    const cached = FISH_IMAGE_CACHE[species.name];
+    const img = document.createElement('img');
+    img.src = (cached && cached.processed) ? cached.dataUrl : ('images/' + species.img);
+    img.alt = species.name;
+    img.style.maxWidth = sizePx+'px';
+    img.style.maxHeight = (sizePx*0.65)+'px';
+    img.style.width='auto'; img.style.height='auto';
+    img.style.display='block'; img.style.margin='0 auto';
+    img.onerror = function(){ container.innerHTML = fishIllustrationSvg(species, tier); };
+    container.appendChild(img);
+    return container;
+  }
+  function buildFishThumbnail(species){
+    const cached = FISH_IMAGE_CACHE[species.name];
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'width:38px;height:38px;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+    const img = document.createElement('img');
+    img.src = (cached && cached.processed) ? cached.dataUrl : ('images/' + species.img);
+    img.alt = species.name;
+    img.style.cssText = 'max-width:38px;max-height:38px;width:auto;height:auto;';
+    img.onerror = function(){ wrap.innerHTML = fishIllustrationSvg(species,'small'); wrap.querySelector('svg').style.cssText='width:38px;height:auto;'; };
+    wrap.appendChild(img);
+    return wrap;
+  }
+
+  // ---------------- Fish illustrations (self-contained SVG, no external images) ----------------
+  // One hand-built silhouette per species so a salmon, a flatfish, a rockfish, a
+  // squid, and a shark all read as visually distinct — not the same template
+  // recolored. Three size tiers per species (small/medium/large), chosen from
+  // where the catch's weight falls within that species' own [min,max] range.
+  function sizeTierFor(species, weight){
+    const frac = (weight - species.wMin) / Math.max(0.0001, species.wMax - species.wMin);
+    if(frac < 0.33) return 'small';
+    if(frac < 0.66) return 'medium';
+    return 'large';
+  }
+  const TIER_SCALE = { small: 0.68, medium: 0.86, large: 1.05 };
+
+  function fusiformFish(bodyColor, backColor, spots){
+    // Torpedo-bodied fish: salmon, trout, dogfish, lingcod
+    return `<path d="M18,50 C18,30 45,16 95,16 C150,14 195,30 215,50 C195,70 150,86 95,84 C45,84 18,70 18,50 Z" fill="${bodyColor}"/>
+      <path d="M18,50 C18,34 40,22 80,18 C60,28 46,40 46,50 C46,60 60,72 80,82 C40,78 18,66 18,50 Z" fill="${backColor}"/>
+      <path d="M0,50 L20,36 L20,64 Z" fill="${bodyColor}"/>
+      <path d="M60,18 L85,2 L100,18 Z" fill="${backColor}"/>
+      <path d="M150,20 L168,10 L172,22 Z" fill="${backColor}"/>
+      <path d="M100,80 L118,96 L128,82 Z" fill="${bodyColor}"/>
+      <path d="M40,70 L28,88 L46,84 Z" fill="${bodyColor}"/>
+      ${spots}
+      <circle cx="205" cy="46" r="5" fill="#1a1a1a"/>`;
+  }
+  function spotPattern(color,count){
+    let s=''; for(let i=0;i<count;i++){
+      const x=60+Math.random()*120, y=22+Math.random()*30, r=1.5+Math.random()*1.8;
+      s+=`<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r.toFixed(1)}" fill="${color}"/>`;
+    }
+    return s;
+  }
+  function rockfishShape(bodyColor, finColor){
+    // Spinier, deeper-bodied, big-eyed
+    return `<path d="M25,50 C25,26 55,12 100,12 C145,12 185,28 210,50 C185,72 145,88 100,88 C55,88 25,74 25,50 Z" fill="${bodyColor}"/>
+      <path d="M55,12 L60,-4 L68,13 L76,-6 L84,13 L92,-4 L98,13 L106,-4 L114,13 L122,-4 L130,13" stroke="${finColor}" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M0,50 L24,38 L24,62 Z" fill="${bodyColor}"/>
+      <path d="M110,86 L124,102 L134,84 Z" fill="${bodyColor}"/>
+      <path d="M48,72 L38,90 L58,82 Z" fill="${finColor}"/>
+      <path d="M170,30 L188,20 L182,36 Z" fill="${finColor}"/>
+      <circle cx="195" cy="44" r="7" fill="#1a1a1a"/>
+      <circle cx="197" cy="42" r="2" fill="#fff"/>`;
+  }
+  function flatfishShape(bodyColor, spotColor){
+    // Wide, oval, both eyes on top
+    return `<ellipse cx="110" cy="50" rx="95" ry="46" fill="${bodyColor}"/>
+      <path d="M15,50 L0,50 L15,40 Z" fill="${bodyColor}"/>
+      ${spotPattern(spotColor,10)}
+      <circle cx="150" cy="34" r="7" fill="#1a1a1a"/>
+      <circle cx="168" cy="38" r="6" fill="#1a1a1a"/>
+      <circle cx="152" cy="32" r="2" fill="#fff"/>`;
+  }
+  function greenlingShape(bodyColor, backColor){
+    return `<path d="M20,50 C20,32 48,20 92,20 C140,18 180,32 205,50 C180,68 140,82 92,80 C48,80 20,68 20,50 Z" fill="${bodyColor}"/>
+      <path d="M20,50 C20,38 36,28 66,24 C50,32 40,42 40,50 C40,58 50,68 66,76 C36,72 20,62 20,50 Z" fill="${backColor}"/>
+      <path d="M0,50 L18,40 L18,60 Z" fill="${bodyColor}"/>
+      <path d="M55,20 L65,4 L80,20 Z" fill="${backColor}"/>
+      <path d="M95,78 L110,94 L120,80 Z" fill="${bodyColor}"/>
+      ${spotPattern(backColor,7)}
+      <circle cx="192" cy="46" r="5" fill="#1a1a1a"/>`;
+  }
+  function halibutShape(bodyColor, spotColor){
+    return `<path d="M8,50 C8,20 55,4 115,4 C170,4 205,26 212,50 C205,74 170,96 115,96 C55,96 8,80 8,50 Z" fill="${bodyColor}"/>
+      <path d="M8,50 L0,50 L8,42 Z" fill="${bodyColor}"/>
+      ${spotPattern(spotColor,14)}
+      <circle cx="165" cy="34" r="7" fill="#1a1a1a"/>
+      <circle cx="184" cy="38" r="6" fill="#1a1a1a"/>`;
+  }
+  function squidShape(bodyColor){
+    return `<path d="M100,4 C60,4 40,30 40,55 C40,75 55,88 70,92 L60,70 L75,86 L80,64 L95,88 L100,62 L115,88 L120,64 L135,86 L140,70 L130,92 C145,88 160,75 160,55 C160,30 140,4 100,4 Z" fill="${bodyColor}"/>
+      <path d="M75,20 L55,2 M100,14 L96,-8 M125,20 L145,2" stroke="${bodyColor}" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <circle cx="80" cy="40" r="7" fill="#1a1a1a"/>
+      <circle cx="120" cy="40" r="7" fill="#1a1a1a"/>
+      <circle cx="82" cy="38" r="2" fill="#fff"/>
+      <circle cx="122" cy="38" r="2" fill="#fff"/>`;
+  }
+  function sharkShape(bodyColor, bellyColor){
+    return `<path d="M10,52 C10,32 50,20 110,20 C165,18 205,34 225,52 C205,66 175,74 150,74 L150,90 L135,74 C110,80 60,80 30,66 Z" fill="${bodyColor}"/>
+      <path d="M10,52 C10,40 30,30 60,26 C40,34 30,44 30,52 C30,60 40,68 60,74 C30,68 10,60 10,52 Z" fill="${bellyColor}"/>
+      <path d="M85,20 L100,0 L112,22 Z" fill="${bodyColor}"/>
+      <path d="M0,52 L20,42 L20,60 Z" fill="${bodyColor}"/>
+      <circle cx="205" cy="48" r="4" fill="#1a1a1a"/>
+      <path d="M195,58 Q205,64 215,58" stroke="#1a1a1a" stroke-width="2" fill="none"/>`;
+  }
+
+  const FISH_ILLUSTRATIONS = {
+    'Coho Salmon':            ()=>fusiformFish('#8fa8b5','#4a6470', spotPattern('#2a3a42',14)),
+    'Pink Salmon':             ()=>fusiformFish('#9fb0ad','#5a7268', spotPattern('#33453e',18)),
+    'Chinook Salmon':          ()=>fusiformFish('#7d8f9a','#3f5560', spotPattern('#22323a',20)),
+    'Chum Salmon':             ()=>fusiformFish('#a3968a','#5e4f42', spotPattern('#3a2f26',6)),
+    'Lingcod':                 ()=>fusiformFish('#7a8f6b','#4a5c3d', spotPattern('#2e3a24',10)),
+    'Kelp Greenling':          ()=>greenlingShape('#8a9a5f','#4f5c33'),
+    'White-Spotted Greenling': ()=>greenlingShape('#6f7d8a','#3d4750'),
+    'Copper Rockfish':         ()=>rockfishShape('#b06a45','#6e3b23'),
+    'Quillback Rockfish':      ()=>rockfishShape('#8a5a3a','#4a2e1c'),
+    'Black Rockfish':          ()=>rockfishShape('#3f4247','#1c1e21'),
+    'Starry Flounder':         ()=>flatfishShape('#8a7a5f','#3a3226'),
+    'Sole':                    ()=>flatfishShape('#a89578','#5c4f3a'),
+    'Sea-Run Cutthroat':       ()=>fusiformFish('#8a9b6f','#4a5c3a', spotPattern('#2a331d',22)),
+    'Halibut':                 ()=>halibutShape('#7d7264','#332e26'),
+    'Squid':                   ()=>squidShape('#c99a8a'),
+    'Dogfish':                 ()=>sharkShape('#6b7278','#c4c9cc')
+  };
+  function fishIllustrationSvg(species, tier){
+    const scale = TIER_SCALE[tier];
+    const inner = (FISH_ILLUSTRATIONS[species.name] || (()=>fusiformFish('#8fa8b5','#4a6470','')))();
+    return `<svg viewBox="0 0 225 100" width="${(200*scale).toFixed(0)}" height="${(90*scale).toFixed(0)}" style="display:block;margin:0 auto;">${inner}</svg>`;
+  }
+
+  // ---------------- Real image cache (images/ folder), with white-bg stripping ----------------
+  // Loads each species' photo once at startup, strips any near-white background
+  // pixels to transparent (handles the couple of JPGs that came with a white
+  // background, harmless no-op on already-transparent PNGs), and caches both a
+  // <canvas> (for drawing directly on the game canvas) and a data-URL (for DOM
+  // <img> tags in the popup/icebox) so nothing re-processes on every use.
+  const FISH_IMAGE_CACHE = {};
+  function stripWhiteBackground(img){
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const cctx = c.getContext('2d');
+    cctx.drawImage(img, 0, 0);
+    const data = cctx.getImageData(0, 0, c.width, c.height); // may throw; caller handles it
+    const px = data.data;
+    for(let i=0;i<px.length;i+=4){
+      const r=px[i], g=px[i+1], b=px[i+2];
+      if(r>235 && g>235 && b>235){ px[i+3]=0; }
+      else if(r>205 && g>205 && b>205){
+        const brightness=(r+g+b)/3;
+        px[i+3]=Math.round(px[i+3]*Math.max(0, 1-(brightness-205)/30));
+      }
+    }
+    cctx.putImageData(data, 0, 0);
+    return c;
+  }
+  function preloadFishImages(){
+    FISH_DATA.forEach(sp=>{
+      // status: 'loading' | 'loaded' | 'error' — 'loaded' only requires the raw
+      // photo itself to load. processed=true additionally means the white-bg
+      // strip succeeded; if it didn't (some contexts block pixel-level canvas
+      // reads), the raw image is still fully usable everywhere, just without
+      // the transparency effect — the photo itself was never the thing at risk.
+      const entry = { status:'loading', rawImg:null, canvas:null, dataUrl:null, processed:false, w:0, h:0 };
+      FISH_IMAGE_CACHE[sp.name] = entry;
+      const img = new Image();
+      img.onload = function(){
+        entry.rawImg = img; entry.w = img.naturalWidth; entry.h = img.naturalHeight; entry.status='loaded';
+        try{
+          const processed = stripWhiteBackground(img);
+          entry.canvas = processed;
+          entry.dataUrl = processed.toDataURL('image/png');
+          entry.processed = true;
+        }catch(e){ entry.processed = false; }
+      };
+      img.onerror = function(){ entry.status='error'; };
+      img.src = 'images/' + sp.img;
+    });
+  }
+  preloadFishImages();
+
+  function breakLine(){
+    window.fishOnHaptic([60,50,60,50,120]);
+    showCatchPopup(null, 'BROKEN LINE!', 'bad', 1600);
+    setStatus(`Line snapped! That ${hookedFish.category} was too much for ${window.fishOnCastControl.lineStrength}lb test.`, 'bad');
+    clearInterval(fightHapticTimer);
+    hookedFish=null; fishRunning=false;
+  }
+  function landFish(){
+    const f=hookedFish;
+    const species = FISH_DATA.find(s=>s.name===f.name);
+    const tier = species ? sizeTierFor(species, f.weight) : 'medium';
+    const visual = species ? buildFishVisual(species, tier) : null;
+    window.fishOnHaptic([30,40,30,40,30,40,90]);
+    showCatchPopup(
+      visual,
+      `Caught: ${f.name}<div style="font-size:13px;color:#9fb0b0;font-weight:400;">${f.weight.toFixed(1)} lb · ${tier}</div>`,
+      '', 2400
+    );
+    setStatus(`Landed a ${f.weight.toFixed(1)}lb ${f.name.toLowerCase()}!`, 'ok');
+    if(species) addToIcebox(species, f.weight, tier);
+    clearInterval(fightHapticTimer);
+    hookedFish=null; fishRunning=false;
+  }
+
+  // ---------------- Icebox: in-memory catch log, resets on page reload ----------------
+  const iceboxLog = [];
+  function addToIcebox(species, weight, tier){
+    iceboxLog.unshift({ species, weight, tier });
+    renderIcebox();
+  }
+  function renderIcebox(){
+    const row = document.getElementById('iceboxRow');
+    const count = document.getElementById('iceboxCount');
+    const empty = document.getElementById('iceboxEmpty');
+    count.textContent = '('+iceboxLog.length+')';
+    empty.style.display = iceboxLog.length ? 'none' : 'block';
+    row.innerHTML = '';
+    iceboxLog.forEach(entry=>{
+      const item = document.createElement('div');
+      item.className='icebox-list-item';
+      const thumb = document.createElement('div');
+      thumb.className='thumb';
+      thumb.appendChild(buildFishThumbnail(entry.species));
+      const info = document.createElement('div');
+      info.className='info';
+      const name = document.createElement('div');
+      name.className='name'; name.textContent = entry.species.name;
+      const wt = document.createElement('div');
+      wt.className='wt'; wt.textContent = entry.weight.toFixed(1)+' lb · '+entry.tier;
+      info.appendChild(name); info.appendChild(wt);
+      item.appendChild(thumb); item.appendChild(info);
+      item.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const visual = buildFishVisual(entry.species, entry.tier, 1.4);
+        showCatchPopup(
+          visual,
+          `<div style="font-size:21px;">${entry.species.name}</div><div style="font-size:18px;color:#9fb0b0;font-weight:400;margin-top:4px;">${entry.weight.toFixed(1)} lb · ${entry.tier}</div>`,
+          'enlarged', 3400
+        );
+      });
+      row.appendChild(item);
+    });
+  }
+
+  function triggerFishJump(){
+    fishJumping=true; splashActive=true;
+    window.fishOnHapticFlash([20,20,20,70]);
+    const cat = hookedFish ? hookedFish.category : 'fish';
+    setStatus(`It's a ${cat}!`, 'ok');
+    if(hookedFish) hookedFish.revealed = true;
+    setTimeout(()=>{ splashActive=false; }, 450);
+    setTimeout(()=>{ fishJumping=false; }, 1400);
+  }
+
+  // ---------------- Current ----------------
+  // direction: +1 = flowing outward (away from shore), -1 = flowing toward shore.
+  // Rerolls on every fresh load, and again every 30 minutes if the page stays open.
+  let currentDirection = 1, currentSpeedFtPerSec = 0;
+  let currentRolledOnce = false;
+  function rollCurrent(){
+    currentDirection = Math.random()<0.5 ? 1 : -1;
+    currentSpeedFtPerSec = 0.3 + Math.random()*1.2;
+    if(currentRolledOnce){
+      setStatus('Current shifted — now flowing '+(currentDirection>0?'outward':'toward shore')+' at '+currentSpeedFtPerSec.toFixed(1)+' ft/s.', '');
+    }
+    currentRolledOnce = true;
+    updateCurrentReadout();
+  }
+  function updateCurrentReadout(){
+    const el=document.getElementById('roCurrent');
+    if(el) el.textContent = (currentDirection>0?'→':'←')+currentSpeedFtPerSec.toFixed(1);
+  }
+  rollCurrent();
+  setInterval(rollCurrent, 30*60*1000);
+
+  let distanceFt = 0, depthFt = 0, bottomDepthFt = depthProfileFt(0);
+  let bailOpen = false, freeFalling = false, bottomed = false;
+  let reelSpeedFtPerSec = 0;
+  let lureOz = 1;
+  let lastFrameTs = null;
+  let prevDistanceFt = 0, prevDepthFt = 0;
+  let fishFacingFlip = false, fishTiltAngle = 0; // orientation of the hooked fish's real photo, based on actual movement
+  let castActive = false, lockedLineFt = null, recastPending = false;
+  window.fishOnIsCastActive = function(){ return castActive; };
+
+  const statusEl=document.getElementById('reelStatus');
+  const roDepth=document.getElementById('roDepth'), roDist=document.getElementById('roDist'), roBail=document.getElementById('roBail');
+  const transferInfo=document.getElementById('rTransferInfo');
+
+  function setStatus(t,cls){ statusEl.textContent=t; statusEl.className='status'+(cls?' '+cls:''); }
+  function updateReadouts(){
+    roDepth.textContent=depthFt.toFixed(0)+' ft';
+    roDist.textContent=distanceFt.toFixed(0)+' ft';
+    roBail.textContent=bailOpen?'Open':'Closed';
+  }
+
+  function resetCast(){
+    depthFt=0; bottomDepthFt=depthProfileFt(distanceFt);
+    bailOpen=false; freeFalling=false; bottomed=false; reelSpeedFtPerSec=0; lockedLineFt=null;
+    setStatus(castActive ? 'Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.' : 'Bail closed. Hold the arc button while you wind up to prepare a cast.', '');
+    updateReadouts(); drawScene();
+    updateBailVisual();
+  }
+
+  // Fully abandons the current cast and returns to a clean "ready to cast" state.
+  // Fixes the lockout bug: the old Reset button left castActive=true, which
+  // permanently blocked the bail-hold-to-cast gesture until a full reel-to-shore.
+  function fullReset(){
+    clearInterval(fightHapticTimer);
+    castActive=false; recastPending=false; distanceFt=0; depthFt=0;
+    bottomDepthFt=depthProfileFt(0); bailOpen=false; freeFalling=false; bottomed=false;
+    lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null;
+    fishJumping=false; splashActive=false;
+    transferInfo.textContent='Set your gear, then hold the bail to cast.';
+    updateBailVisual(); updateReadouts(); drawScene();
+    setStatus('Ready. Hold the bail button, wind up, and whip forward.', '');
+  }
+
+  window.startReelPhase = function(distFt, oz){
+    castActive=true; recastPending=false; distanceFt = distFt; lureOz = oz;
+    hookedFish=null; clearInterval(fightHapticTimer);
+    transferInfo.textContent = 'Cast distance: '+distFt.toFixed(0)+'ft · Lure: '+oz+'oz';
+    resetCast();
+    bailOpen=true; freeFalling=true;
+    setStatus('Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.', '');
+    updateBailVisual(); updateReadouts();
+    fitCanvas(); drawScene();
+  };
+  document.getElementById('reelResetBtn').addEventListener('click', fullReset);
+
+  // ---- bail: simple tap button, half-circle visual kept ----
+  const bailBtn=document.getElementById('reelBailBtn');
+  const bailFill=document.getElementById('reelBailFill');
+  const bailLabel=document.getElementById('reelBailLabel');
+  function updateBailVisual(){
+    bailFill.setAttribute('stroke-dasharray', bailOpen? '180 300' : '0 300');
+    bailLabel.textContent = !castActive ? 'HOLD: CAST' : (bailOpen ? 'PRESS: CLOSE BAIL' : 'PRESS: OPEN BAIL');
+  }
+  let castHoldPointer=false;
+  bailBtn.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    if(!castActive){
+      castHoldPointer=true; bailOpen=true;
+      window.fishOnCastControl.bailHeld=true;
+      window.fishOnEnableCastMotion();
+      window.fishOnArmCast();
+      setStatus('Bail held open. Wind up, then release to cast.', '');
+      // Failsafe: the iOS permission dialog triggered above can interrupt the touch
+      // sequence with a pointercancel instead of pointerup, which would otherwise
+      // leave the hold stuck forever and let a later jig misfire as a cast.
+      clearTimeout(window._fishOnHoldFailsafe);
+      window._fishOnHoldFailsafe = setTimeout(()=>{
+        if(window.fishOnCastControl.bailHeld){
+          window.fishOnCastControl.bailHeld=false;
+          castHoldPointer=false;
+          window.fishOnReleaseCast();
+          if(!castActive){ bailOpen=false; updateBailVisual(); updateReadouts(); }
+        }
+      }, 4000);
+    } else if(bailOpen){
+      bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
+      setStatus('Bail closed. As the lure sinks, the fixed line will pull it toward shore.', '');
+    } else {
+      bailOpen=true; freeFalling=true; lockedLineFt=null; reelSpeedFtPerSec=0;
+      setStatus('Bail open — lure free-spooling straight down.', '');
+    }
+    updateBailVisual(); updateReadouts();
+  });
+  function endBailHold(){
+    if(!castHoldPointer) return;
+    castHoldPointer=false;
+    clearTimeout(window._fishOnHoldFailsafe);
+    window.fishOnCastControl.bailHeld=false;
+    window.fishOnReleaseCast();
+    setTimeout(()=>{
+      if(!castActive){
+        bailOpen=false; updateBailVisual(); updateReadouts();
+        setStatus('Bail closed. Hold the arc button while you wind up to prepare a cast.', '');
+      }
+    }, 30);
+  }
+  window.addEventListener('pointerup', endBailHold);
+  window.addEventListener('pointercancel', endBailHold);
+
+  // ---- reel wheel ----
+  const wheel=document.getElementById('reelWheel');
+  const dialRotor=document.getElementById('dialRotor');
+  let wheelDragging=false, wheelLastAngle=null, wheelLastTs=null, wheelRotationRad=0;
+  const RETRIEVE_FT_PER_RAD = 3.0;
+  function wheelAngle(e){
+    const rect=wheel.getBoundingClientRect();
+    const cx=rect.left+rect.width/2, cy=rect.top+rect.height/2;
+    return Math.atan2(e.clientY-cy, e.clientX-cx);
+  }
+  wheel.addEventListener('pointerdown', e=>{
+    wheelDragging=true; wheelLastAngle=wheelAngle(e); wheelLastTs=performance.now();
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', e=>{
+    if(!wheelDragging) return;
+    const a=wheelAngle(e), now=performance.now();
+    let d=a-wheelLastAngle;
+    while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2;
+    const dt=Math.max(0.001,(now-wheelLastTs)/1000);
+    wheelRotationRad += d;
+    dialRotor.style.transform = 'rotate('+wheelRotationRad+'rad)';
+    if(d>0){
+      reelSpeedFtPerSec = Math.min(10, (d/dt)*RETRIEVE_FT_PER_RAD);
+      if(bailOpen || freeFalling){ bailOpen=false; freeFalling=false; updateBailVisual(); setStatus('Reeling — bail auto-closed.',''); }
+    }
+    wheelLastAngle=a; wheelLastTs=now;
+  });
+  window.addEventListener('pointerup', ()=>{ wheelDragging=false; });
+
+  // ---- jig via device motion ----
+  let jigCooldown=false;
+  const JIG_THRESHOLD = { high:9, medium:15, low:22 };
+  function tryJig(mag){
+    const threshold = JIG_THRESHOLD[window.fishOnCastControl.sensitivity || 'medium'];
+    if(mag>threshold && !bailOpen && !jigCooldown){
+      jigCooldown=true; setTimeout(()=>jigCooldown=false, 500);
+      doJig(mag);
+    }
+  }
+  function doJig(mag){
+    const basePopFt = Math.min(30, Math.max(5, mag*0.8));
+    const popFt = basePopFt * 0.75; // 25% reduction, per earlier fix
+    const popDistFt = popFt * 0.33; // horizontal component, feet-native now
+    depthFt = Math.max(0, depthFt - popFt);
+    distanceFt = Math.max(0, distanceFt - popDistFt);
+    bottomDepthFt = depthProfileFt(distanceFt);
+    freeFalling = true; bottomed=false;
+    setStatus('Jig! Lure popped up and toward shore, now falling again.', '');
+    window.fishOnHaptic(15);
+  }
+
+  // ---- physics loop ----
+  function tick(ts){
+    if(lastFrameTs===null) lastFrameTs=ts;
+    const dt=Math.min(0.05,(ts-lastFrameTs)/1000);
+    lastFrameTs=ts;
+
+    if(castActive && !bailOpen){
+      if(!wheelDragging){
+        reelSpeedFtPerSec *= Math.pow(0.15, dt);
+        if(reelSpeedFtPerSec<0.05) reelSpeedFtPerSec=0;
+      }
+
+      if(hookedFish){
+        // Periodically the fish makes a run for depth, actively fighting the lift
+        // instead of just being reeled straight up — keeps fights dynamic instead
+        // of surfacing constantly.
+        if(!fishRunning && Math.random() < 0.3*dt){
+          fishRunning = true;
+          fishRunUntil = performance.now() + 700 + Math.random()*900;
+          fishRunDepthRate = 3 + Math.random()*4; // ft/s, pulling deeper
+          window.fishOnHaptic([50,30,50,30,90]); // strong "it's taking off!" cue
+          lastRunHapticAt = performance.now();
+        }
+        if(fishRunning && performance.now() > fishRunUntil) fishRunning = false;
+
+        if(fishRunning && performance.now()-lastRunHapticAt > 140){
+          window.fishOnHaptic(55); // rapid, noticeably stronger buzz for the duration of the run
+          lastRunHapticAt = performance.now();
+        }
+
+        const liftBias = Math.min(1, reelSpeedFtPerSec/2.5); // fast reel → lift; slow reel → stays level
+        let vertRateFtPerSec;
+        if(fishRunning){
+          vertRateFtPerSec = fishRunDepthRate; // fighting back, pulling deeper
+        } else if(reelSpeedFtPerSec>0.05){
+          vertRateFtPerSec = -reelSpeedFtPerSec*1.4*liftBias; // rises only in proportion to how fast you're cranking
+        } else {
+          vertRateFtPerSec = sinkRateFtPerSec(lureOz)*0.3; // idle, mild sink
+        }
+        depthFt = Math.max(0, Math.min(bottomDepthFt, depthFt + vertRateFtPerSec*dt));
+
+        if(reelSpeedFtPerSec>0.05){
+          const closeStep = reelSpeedFtPerSec*dt*0.5*(fishRunning?0.3:1); // a running fish resists coming in too
+          distanceFt = Math.max(0, distanceFt - closeStep);
+        }
+        bottomDepthFt = depthProfileFt(distanceFt);
+        bottomed=false;
+        lockedLineFt = Math.hypot(distanceFt, depthFt);
+        if(depthFt<8 && !fishJumping && !fishRunning) triggerFishJump();
+      } else {
+        // Closing the bail fixes line length. Gravity therefore changes the angle
+        // of the line and pulls the lure shoreward instead of adding more line.
+        // Reel speed decides HOW it comes in: fast reeling lifts it toward the
+        // surface (liftBias→1), slow reeling holds it near its current depth
+        // while creeping shoreward — trolling — rather than yanking it straight up.
+        let lineFt=Math.max(1, lockedLineFt ?? Math.hypot(distanceFt, depthFt));
+        // Bail closed means no new line is deliberately paid out — but an outward
+        // current can still drag the lure further away regardless, which we model
+        // as the current adding to (or, if inward, subtracting from) the effective
+        // line length. A strong enough outward current can keep it from ever
+        // settling to bottom even though the bail is shut.
+        lineFt = Math.max(1, lineFt + currentDirection*currentSpeedFtPerSec*dt);
+        const fracH=depthFt/lineFt;
+        const liftBias = Math.min(1, reelSpeedFtPerSec/2.5);
+        const liftMultiplier = lerp(fracH, 1.4, liftBias);
+        const liftStep = reelSpeedFtPerSec*dt*liftMultiplier;
+        const sinkStep = bottomed ? 0 : sinkRateFtPerSec(lureOz)*dt;
+        let newDepth = depthFt + sinkStep - liftStep;
+        lineFt=Math.max(1, lineFt-reelSpeedFtPerSec*dt);
+        newDepth=Math.max(0, Math.min(lineFt, newDepth));
+        distanceFt=Math.sqrt(Math.max(0,lineFt*lineFt-newDepth*newDepth));
+        bottomDepthFt = depthProfileFt(distanceFt);
+        newDepth = Math.max(0, Math.min(bottomDepthFt, newDepth));
+        distanceFt=Math.sqrt(Math.max(0,lineFt*lineFt-newDepth*newDepth));
+        lockedLineFt=lineFt;
+        const wasBottomed = bottomed;
+        bottomed = newDepth >= bottomDepthFt - 0.5;
+        depthFt = newDepth;
+        if(bottomed && !wasBottomed){
+          window.fishOnHaptic(40);
+          setStatus('Bottom! Felt at '+depthFt.toFixed(0)+'ft. Reel to lift off, or jig to hop it.', 'ok');
+        }
+      }
+
+      if(hookedFish && fishRunning && reelSpeedFtPerSec > AGGRESSIVE_REEL_THRESHOLD){
+        const lineTestLb = window.fishOnCastControl.lineStrength || 10;
+        const overRatio = lineOverRatio(lineTestLb, hookedFish.weight);
+        if(overRatio > 0){
+          const snapChancePerSec = overRatio*overRatio*0.6;
+          if(Math.random() < snapChancePerSec*dt) breakLine();
+        }
+      }
+
+      if(distanceFt<16 && !recastPending){
+        recastPending=true;
+        const caughtFish = hookedFish;
+        if(caughtFish){
+          landFish();
+        } else {
+          window.fishOnHaptic([35,45,35]);
+          setStatus('Ready to recast!', 'ok');
+        }
+        setTimeout(fullReset, caughtFish ? 1500 : 900);
+      }
+    } else if(castActive && bailOpen && freeFalling && !bottomed){
+      // Bail open: line pays out freely, so the current can drag the lure sideways
+      // as it falls — it still sinks, just drifting in whichever direction the
+      // current is running rather than staying at a fixed distance.
+      depthFt += sinkRateFtPerSec(lureOz)*dt;
+      distanceFt = Math.max(0, Math.min(MAX_DIST_FT, distanceFt + currentDirection*currentSpeedFtPerSec*dt));
+      bottomDepthFt = depthProfileFt(distanceFt);
+      if(depthFt>=bottomDepthFt){
+        depthFt=bottomDepthFt; bottomed=true; freeFalling=false;
+        window.fishOnHaptic(40);
+        setStatus('Bottom! Felt at '+depthFt.toFixed(0)+'ft. Close the bail and reel, or jig.', 'ok');
+      }
+    }
+
+    if(dt>0){
+      const rawVX = (distanceFt-prevDistanceFt)/dt;
+      const rawVY = (depthFt-prevDepthFt)/dt;
+      const speed = Math.hypot(rawVX, rawVY);
+      if(speed > 0.15){
+        fishFacingFlip = rawVX >= 0; // moving away from shore → mirror the (left-facing) source art
+        let tilt = Math.atan2(rawVY, Math.abs(rawVX)+0.001);
+        tilt = Math.max(-0.9, Math.min(0.9, tilt));
+        fishTiltAngle = fishTiltAngle*0.75 + tilt*0.25; // smoothed, avoids jittery snapping frame to frame
+      }
+      prevDistanceFt = distanceFt; prevDepthFt = depthFt;
+    }
+
+    updateAmbientFish(dt);
+    updateReadouts();
+    drawScene();
+    requestAnimationFrame(tick);
+  }
+
+  function drawScene(){
+    const w=canvas.clientWidth||520, h=260;
+    const surfaceY=30, floorY=h-14;
+    let g=ctx.createLinearGradient(0,0,0,surfaceY); g.addColorStop(0,'#7d97a3'); g.addColorStop(1,'#9fb3ba');
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,surfaceY);
+    g=ctx.createLinearGradient(0,surfaceY,0,floorY); g.addColorStop(0,'#3c5b68'); g.addColorStop(1,'#152a33');
+    ctx.fillStyle=g; ctx.fillRect(0,surfaceY,w,floorY-surfaceY);
+
+    ctx.beginPath();
+    ctx.moveTo(0, surfaceY+(TERRAIN[0][1]/MAX_DEPTH_FT)*(floorY-surfaceY));
+    TERRAIN.forEach(([p,d])=>{
+      const x=w*(p/100), y=surfaceY+(d/MAX_DEPTH_FT)*(floorY-surfaceY);
+      ctx.lineTo(x,y);
+    });
+    ctx.lineTo(w,floorY); ctx.lineTo(0,floorY); ctx.closePath();
+    ctx.fillStyle='#9c8768'; ctx.fill();
+
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.font='9px -apple-system,sans-serif'; ctx.fillStyle='rgba(255,255,255,0.3)';
+    [0,100,200,300].forEach(ftMark=>{
+      const y=surfaceY+(ftMark/MAX_DEPTH_FT)*(floorY-surfaceY);
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+      ctx.fillText(ftMark+'ft', 4, y-2);
+    });
+
+    // Ambient fish — decorative, placed within each species' real preferred band
+    // AT ITS ACTUAL LOCATION (relative to the local terrain depth there), so
+    // nothing floats underground or hovers absurdly deep in shallow water.
+    const nowSec = performance.now()/1000;
+    for(const f of AMBIENT_FISH){
+      const fx = w*f.xFrac;
+      const fy = surfaceY + (f.depthFt/MAX_DEPTH_FT)*(floorY-surfaceY) + Math.sin(nowSec*f.bobSpeed+f.bobPhase)*3;
+      drawFishIcon(fx, fy, f.size, f.color, f.vx>0, null);
+    }
+
+    const anglerX=w*0.03, anglerY=surfaceY-4;
+    ctx.fillStyle='#2a231c';
+    ctx.beginPath(); ctx.arc(anglerX,anglerY-8,4,0,Math.PI*2); ctx.fill();
+
+    const lureX=w*(distanceFt/MAX_DIST_FT);
+    const lureY=surfaceY+(depthFt/MAX_DEPTH_FT)*(floorY-surfaceY);
+
+    // If showing the real photo, work out its size/orientation up front so the
+    // connecting line can attach to the fish's mouth rather than its center —
+    // the mouth sits at the left edge of the (left-facing) source art, so we
+    // rotate/flip that local offset the same way the image itself will be drawn.
+    let lineTargetX = lureX, lineTargetY = lureY;
+    let hookedPhoto = null; // {source, drawW, drawH} if a real photo will be drawn this frame
+    if(hookedFish){
+      const cachedPre = hookedFish.revealed ? FISH_IMAGE_CACHE[hookedFish.name] : null;
+      if(cachedPre && cachedPre.status==='loaded'){
+        const source = cachedPre.processed ? cachedPre.canvas : cachedPre.rawImg;
+        const drawH = Math.max(22, Math.min(112, 18 + Math.sqrt(hookedFish.weight)*6.3)); // 30% smaller than before
+        const drawW = drawH * (cachedPre.w/cachedPre.h);
+        hookedPhoto = { source, drawW, drawH };
+        const theta = fishFacingFlip ? -fishTiltAngle : fishTiltAngle;
+        const mouthLocalX = (fishFacingFlip ? 1 : -1) * drawW*0.44;
+        lineTargetX = lureX + mouthLocalX*Math.cos(theta);
+        lineTargetY = lureY + mouthLocalX*Math.sin(theta);
+      }
+    }
+
+    // Line follows the straight path from rod tip to the fish's mouth (or the
+    // plain lure point when there's no photo yet), except wherever that
+    // straight path would dip below the seafloor — there it hugs just above the
+    // terrain surface instead of cutting through the ground.
+    const CLEARANCE_PX = 3;
+    const segments = Math.max(6, Math.round(Math.abs(lineTargetX-anglerX)/14));
+    ctx.beginPath(); ctx.moveTo(anglerX, anglerY);
+    for(let i=1;i<=segments;i++){
+      const f=i/segments;
+      const x = anglerX + (lineTargetX-anglerX)*f;
+      const straightY = anglerY + (lineTargetY-anglerY)*f;
+      const distAtX = Math.max(0, Math.min(MAX_DIST_FT, (x/w)*MAX_DIST_FT));
+      const terrainDepthAtX = depthProfileFt(distAtX);
+      const terrainYAtX = surfaceY + (terrainDepthAtX/MAX_DEPTH_FT)*(floorY-surfaceY);
+      const y = Math.min(straightY, terrainYAtX - CLEARANCE_PX);
+      ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1; ctx.stroke();
+    if(hookedFish){
+      const size = Math.max(8, Math.min(24, 7+hookedFish.weight*0.7));
+      if(hookedPhoto){
+        // Source photos face left by default. Flip horizontally when swimming
+        // away from shore, and tilt to match actual rise/dive — the flip has to
+        // negate the tilt angle too, since mirroring the x-axis also reverses
+        // which way a given rotation appears to turn.
+        ctx.save();
+        ctx.translate(lureX, lureY);
+        if(fishFacingFlip) ctx.scale(-1,1);
+        ctx.rotate(fishFacingFlip ? -fishTiltAngle : fishTiltAngle);
+        ctx.drawImage(hookedPhoto.source, -hookedPhoto.drawW/2, -hookedPhoto.drawH/2, hookedPhoto.drawW, hookedPhoto.drawH);
+        ctx.restore();
+      } else {
+        drawFishIcon(lureX, lureY, size, '#e8b04a', distanceFt<200, '#7a4a10');
+      }
+    } else {
+      ctx.fillStyle= bottomed? '#b4483f' : '#d0703c';
+      ctx.beginPath(); ctx.arc(lureX,lureY,4,0,Math.PI*2); ctx.fill();
+    }
+
+    if(splashActive){
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=2;
+      for(let i=0;i<3;i++){
+        ctx.beginPath();
+        ctx.arc(lureX, surfaceY, 6+i*7, Math.PI*1.1, Math.PI*1.9);
+        ctx.stroke();
+      }
+    }
+  }
+
+  document.getElementById('iceboxWrap').addEventListener('click', ()=>{
+    document.getElementById('iceboxWrap').classList.toggle('open');
+  });
+
+  fitCanvas(); resetCast();
+  requestAnimationFrame(tick);
+
+  const dbgEvents=document.getElementById('rDbgEvents'), dbgSecure=document.getElementById('rDbgSecure'), dbgAccel=document.getElementById('rDbgAccel'), dbgHaptic=document.getElementById('rDbgHaptic');
+  dbgSecure.textContent='secure: '+(window.isSecureContext?'yes':'NO');
+  dbgHaptic.textContent='vibrate: '+(navigator.vibrate?'available':'unavailable (iOS) — using flash fallback');
+
+  // No button needed — this listener is live from page load. It won't receive real
+  // (non-null) data until the player holds the bail to cast, which is what actually
+  // requests iOS motion permission. Once that's granted, jig works immediately, no
+  // separate "enable" step required.
+  let eventCount=0;
+  window.addEventListener('devicemotion', e=>{
+    eventCount++; dbgEvents.textContent='devicemotion: '+eventCount;
+    const a=(e.acceleration && e.acceleration.x!==null)?e.acceleration:e.accelerationIncludingGravity;
+    if(!a) return;
+    const x=a.x||0,y=a.y||0,z=a.z||0;
+    let mag=Math.sqrt(x*x+y*y+z*z);
+    if(!e.acceleration || e.acceleration.x===null) mag=Math.max(0,mag-9.8);
+    dbgAccel.textContent='accel: '+mag.toFixed(1);
+    tryJig(mag);
+  });
+})();
+
+// ======================= TOP-OF-PAGE IPHONE MOTION BUTTON =======================
+(function(){
+  const bar=document.getElementById('ipMotionBar');
+  const btn=document.getElementById('ipMotionBtn');
+  const note=document.getElementById('ipMotionNote');
+  const needsPrompt = typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function';
+  if(needsPrompt){
+    bar.classList.add('show');
+  }
+  btn.addEventListener('click', async ()=>{
+    btn.textContent='Requesting…';
+    const result = await window.fishOnEnableCastMotion();
+    if(result==='granted' || result==='already'){
+      btn.textContent='Motion Enabled ✓'; btn.className='granted'; btn.disabled=true;
+      note.textContent='All set — hold the bail button below to cast.';
+      setTimeout(()=>bar.classList.remove('show'), 1800);
+    } else if(result==='denied'){
+      btn.textContent='Denied — Tap for Instructions'; btn.className='failed';
+      note.innerHTML='Blocked. Tap the "aA" icon in Safari\'s address bar → Website Settings → set Motion &amp; Orientation Access to Allow, then reload this page.';
+    } else {
+      btn.textContent='Motion Not Available Here'; btn.className='failed'; btn.disabled=true;
+      note.textContent='This browser/device has no motion API — use "Auto Cast" further down instead.';
+    }
+  });
+})();
+</script>
+</body>
+</html>
