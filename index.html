@@ -111,18 +111,12 @@
   .rig-area{display:flex;align-items:center;justify-content:center;gap:18px;padding:14px;}
   #reelBailBtn{width:140px;height:76px;background:transparent;border:none;cursor:pointer;padding:0;}
   #reelWheel{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #384b48, #1a2422 70%);border:3px solid #47605c;position:relative;touch-action:none;}
-  #jigLeverWrap{display:flex;flex-direction:column;align-items:center;gap:6px;margin-left:22px;}
-  .jig-track{
-    width:16px;height:105px;border-radius:8px;
-    background:linear-gradient(180deg,#243532,#1a2422);
-    border:2px solid #47605c;position:relative;touch-action:none;cursor:pointer;
+  .manual-jig-btn{
+    width:32px;height:32px;border-radius:50%;border:2px solid #16262e;
+    background:var(--accent);color:#1a1210;font-weight:800;font-size:9px;
+    cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,0.3);
   }
-  .jig-handle{
-    position:absolute;left:50%;bottom:4px;transform:translate(-50%,0);
-    width:34px;height:8px;border-radius:4px;background:var(--accent);
-    box-shadow:0 2px 4px rgba(0,0,0,0.4);transition:none;
-  }
-  .jig-lever-label{font-size:10px;color:#9fb0b0;text-align:center;letter-spacing:0.02em;}
+  .manual-jig-btn:active{ transform:scale(0.95); }
   #reelWheel .dial-rotor{position:absolute;inset:0;transform-origin:50% 50%;}
   #reelWheel .dial-rotor::after{content:'';position:absolute;top:8px;left:50%;width:4px;height:20px;background:var(--accent);transform:translateX(-50%);border-radius:2px;}
   .wheel-label{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#9fb0b0;pointer-events:none;}
@@ -312,12 +306,15 @@
   </div>
 
   <div class="controls" id="castControlsRow">
-    <button id="simBtn" class="btn-ghost" style="flex:1;">Auto Cast</button>
+    <button id="simBtn" class="btn-ghost" style="flex:1;">Manual Cast and Jig</button>
   </div>
   <div class="sim-panel" id="simPanel">
     <label>Simulated swing force: <span id="simVal">60</span> m/s²</label>
     <input type="range" id="simSlider" min="0" max="180" value="60">
     <button id="simCast" class="btn-ok" style="width:100%;margin-top:8px;">Simulate Cast</button>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:16px;">
+      <button id="manualJigBtn" class="manual-jig-btn">Jig</button>
+    </div>
   </div>
 
   <footer>
@@ -358,12 +355,6 @@
   </div>
   <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
     <div id="reelWheel"><div class="dial-rotor" id="dialRotor"></div><div class="wheel-label">reel wheel</div></div>
-    <div id="jigLeverWrap">
-      <div class="jig-track" id="jigTrack">
-        <div class="jig-handle" id="jigHandle"></div>
-      </div>
-      <div class="jig-lever-label">Manual Jig</div>
-    </div>
   </div>
 
   <div class="icebox-wrap" id="iceboxWrap">
@@ -895,7 +886,7 @@
     const hapticMs = Math.min(600, Math.max(80, 80 + weight*8));
     window.fishOnHapticFlash(hapticMs);
     showFishOnBanner('FISH ON!!');
-    setStatus(`Fish on! Something's pulling hard.`, 'ok');
+    setStatus(coachHookMessage(weight), 'ok');
 
     clearInterval(fightHapticTimer);
     fightHapticTimer = setInterval(()=>{
@@ -907,12 +898,25 @@
     fishRunning=false; fishRunUntil=0;
     window.fishOnHapticFlash([50,40,50,40,50,40,110]);
     showFishOnBanner('YOUR CATCH HOOKED ON A BIGGER FISH!');
-    setStatus(`Something huge just hit your line! Play it carefully.`, 'ok');
+    setStatus(coachHookMessage(weight, true), 'ok');
 
     clearInterval(fightHapticTimer);
     fightHapticTimer = setInterval(()=>{
       if(hookedFish && reelSpeedFtPerSec>0.05) window.fishOnHaptic(35);
     }, 450);
+  }
+  // Warns the player up front if their line is under-rated for what just bit —
+  // this is the moment that warning actually matters, before they start cranking.
+  function coachHookMessage(weight, isPredator){
+    const lineTestLb = window.fishOnCastControl.lineStrength || 10;
+    const ratio = lineOverRatio(lineTestLb, weight);
+    const base = isPredator ? "Something huge just hit your line!" : "Fish on! Something's pulling hard.";
+    if(ratio > 0.5){
+      return base+" This one's well past what your "+lineTestLb+"lb line is rated for — reel gently, especially while it's running, or the line will snap.";
+    } else if(ratio > 0){
+      return base+" It's a bit heavy for your "+lineTestLb+"lb line — ease off if it starts running.";
+    }
+    return base+" Your line can handle this one — reel it in.";
   }
   function showFishOnBanner(text){
     const el=document.getElementById('fishOnBanner');
@@ -1237,7 +1241,7 @@
   const roDepth=document.getElementById('roDepth'), roDist=document.getElementById('roDist'), roBail=document.getElementById('roBail');
   const transferInfo=document.getElementById('rTransferInfo');
 
-  function setStatus(t,cls){ statusEl.textContent=t; statusEl.className='status'+(cls?' '+cls:''); }
+  function setStatus(t,cls){ statusEl.textContent='Coach: '+t; statusEl.className='status'+(cls?' '+cls:''); }
   function updateReadouts(){
     roDepth.textContent=depthFt.toFixed(0)+' ft';
     roDist.textContent=distanceFt.toFixed(0)+' ft';
@@ -1364,7 +1368,7 @@
   window.addEventListener('pointerup', ()=>{ wheelDragging=false; });
 
   // ---- jig via device motion ----
-  let jigCooldown=false;
+  let jigCooldown=false, jigPopping=false;
   const JIG_THRESHOLD = { high:9, medium:15, low:22 };
   function tryJig(mag){
     const threshold = JIG_THRESHOLD[window.fishOnCastControl.sensitivity || 'medium'];
@@ -1374,63 +1378,38 @@
     }
   }
   function doJig(mag){
-    const basePopFt = Math.min(30, Math.max(5, mag*0.8));
-    const popFt = basePopFt * 0.75; // 25% reduction, per earlier fix
-    const popDistFt = popFt * 0.33; // horizontal component, feet-native now
-    depthFt = Math.max(0, depthFt - popFt);
-    distanceFt = Math.max(0, distanceFt - popDistFt);
-    bottomDepthFt = depthProfileFt(distanceFt);
-    freeFalling = true; bottomed=false;
+    const basePopFt = Math.min(22, Math.max(5, mag*0.75)); // lower ceiling — matches a typical real flick, not an extreme one
+    const popFt = basePopFt * 0.75;
+    const popDistFt = popFt * 0.33;
+    const targetDepth = Math.max(0, depthFt - popFt);
+    const targetDist = Math.max(0, distanceFt - popDistFt);
+    const startDepth = depthFt, startDist = distanceFt, startTs = performance.now();
+    const DUR_MS = 200;
+    jigPopping = true; freeFalling = false; bottomed = false;
     setStatus('Jig! Lure popped up and toward shore, now falling again.', '');
     window.fishOnHaptic(15);
-  }
-
-  // ---- manual jig lever (fallback when motion isn't available) ----
-  const jigTrack=document.getElementById('jigTrack'), jigHandle=document.getElementById('jigHandle');
-  const JIG_TRACK_TRAVEL_FT = 15; // conceptual feet of "drop" the full lever travel represents
-  let jigDragging=false, jigFrac=0, jigFallAnim=null;
-  function setJigHandleFrac(f){
-    jigFrac=Math.max(0,Math.min(1,f));
-    const travelPx = jigTrack.clientHeight - jigHandle.offsetHeight - 8;
-    jigHandle.style.transform = 'translate(-50%,'+(-jigFrac*travelPx)+'px)';
-  }
-  function jigPointerFrac(e){
-    const rect=jigTrack.getBoundingClientRect();
-    const f = (rect.bottom - e.clientY) / rect.height;
-    return Math.max(0, Math.min(1, f));
-  }
-  jigTrack.addEventListener('pointerdown', e=>{
-    e.preventDefault();
-    if(jigFallAnim) cancelAnimationFrame(jigFallAnim);
-    jigDragging=true;
-    try{ jigTrack.setPointerCapture(e.pointerId); }catch(err){}
-    setJigHandleFrac(jigPointerFrac(e));
-  });
-  jigTrack.addEventListener('pointermove', e=>{
-    if(!jigDragging) return;
-    setJigHandleFrac(jigPointerFrac(e));
-  });
-  function endJigDrag(){
-    if(!jigDragging) return;
-    jigDragging=false;
-    if(jigFrac > 0.18){ tryJig(10 + jigFrac*30); }
-    // Handle falls back to rest at the same rate the lure actually sinks —
-    // heavier lures fall (and the lever resets) faster than light ones.
-    const sinkRate = sinkRateFtPerSec(lureOz);
-    const fullFallMs = (JIG_TRACK_TRAVEL_FT/sinkRate)*1000;
-    const duration = fullFallMs * jigFrac;
-    const startFrac = jigFrac, startTs = performance.now();
-    function fall(ts){
-      const t = duration>0 ? Math.min(1, (ts-startTs)/duration) : 1;
-      setJigHandleFrac(startFrac*(1-t));
-      if(t<1) jigFallAnim = requestAnimationFrame(fall);
-      else { setJigHandleFrac(0); jigFallAnim=null; }
+    function animatePop(ts){
+      const t = Math.min(1, (ts-startTs)/DUR_MS);
+      const ease = 1-Math.pow(1-t,3);
+      depthFt = startDepth + (targetDepth-startDepth)*ease;
+      distanceFt = startDist + (targetDist-startDist)*ease;
+      if(t<1){ requestAnimationFrame(animatePop); }
+      else {
+        depthFt=targetDepth; distanceFt=targetDist;
+        bottomDepthFt=depthProfileFt(distanceFt);
+        jigPopping=false; freeFalling=true;
+      }
     }
-    jigFallAnim = requestAnimationFrame(fall);
+    requestAnimationFrame(animatePop);
   }
-  jigTrack.addEventListener('pointerup', endJigDrag);
-  jigTrack.addEventListener('pointercancel', endJigDrag);
-  setJigHandleFrac(0);
+  // "Same distance as a real phone flick" — the manual Jig button (in the
+  // Manual Cast and Jig panel) uses this fixed, representative magnitude
+  // rather than a user-scaled drag, matching a typical real flick's pop height.
+  const MANUAL_JIG_MAG = 18;
+  const manualJigBtn = document.getElementById('manualJigBtn');
+  if(manualJigBtn){
+    manualJigBtn.addEventListener('click', ()=>{ tryJig(MANUAL_JIG_MAG); });
+  }
 
   // ---- physics loop ----
   function tick(ts){
@@ -1438,7 +1417,9 @@
     const dt=Math.min(0.05,(ts-lastFrameTs)/1000);
     lastFrameTs=ts;
 
-    if(castActive && !bailOpen){
+    if(jigPopping){
+      // Jig pop is animating on its own; skip normal physics this frame.
+    } else if(castActive && !bailOpen){
       if(!wheelDragging){
         reelSpeedFtPerSec *= Math.pow(0.15, dt);
         if(reelSpeedFtPerSec<0.05) reelSpeedFtPerSec=0;
@@ -1512,7 +1493,7 @@
         depthFt = newDepth;
         if(bottomed && !wasBottomed){
           window.fishOnHaptic(40);
-          setStatus('Bottom! Felt at '+depthFt.toFixed(0)+'ft. Reel to lift off, or jig to hop it.', 'ok');
+          setStatus('Bottom! Felt it at '+depthFt.toFixed(0)+'ft. Try jigging — with the bail closed, flick your phone up like setting the hook.', 'ok');
         }
       }
 
@@ -1546,7 +1527,7 @@
       if(depthFt>=bottomDepthFt){
         depthFt=bottomDepthFt; bottomed=true; freeFalling=false;
         window.fishOnHaptic(40);
-        setStatus('Bottom! Felt at '+depthFt.toFixed(0)+'ft. Close the bail and reel, or jig.', 'ok');
+        setStatus('Bottom! Felt it at '+depthFt.toFixed(0)+'ft. Close the bail, then flick your phone up to jig — or start reeling.', 'ok');
       }
     }
 
@@ -1620,7 +1601,7 @@
       const cachedPre = hookedFish.revealed ? FISH_IMAGE_CACHE[hookedFish.name] : null;
       if(cachedPre && cachedPre.status==='loaded'){
         const source = cachedPre.processed ? cachedPre.canvas : cachedPre.rawImg;
-        const drawH = Math.max(22, Math.min(112, 18 + Math.sqrt(hookedFish.weight)*6.3)); // 30% smaller than before
+        const drawH = Math.max(13, Math.min(150, 13 + Math.sqrt(hookedFish.weight)*6.24)); // 13px small fish up to 150px for monsters
         const drawW = drawH * (cachedPre.w/cachedPre.h);
         hookedPhoto = { source, drawW, drawH };
         const theta = fishFacingFlip ? -fishTiltAngle : fishTiltAngle;
