@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Cast + Reel Prototype</title>
+<title>Fish On! Fish On! | Saltwater Shore Fishing Simulator</title>
 <style>
   :root{
     --sky-top:#7d97a3; --sky-bottom:#c7d3d3;
@@ -150,6 +150,44 @@
   #hapticFlash{position:fixed;inset:0;z-index:80;pointer-events:none;opacity:0;background:var(--accent);
     transition:opacity 0.08s ease-out;}
   #hapticFlash.pulse{transition:opacity 0.04s ease-out;}
+@media (min-width: 640px){
+  body{ overflow-y:auto; }
+  #screenCast.wrap{
+    display:grid;
+    grid-template-columns: 1.6fr 1fr;
+    grid-template-areas:
+      "title     gear"
+      "caststat  gear"
+      "castdbg   reelstat"
+      "canvas    bail"
+      "canvas    wheel"
+      "readouts  autobtn"
+      "icebox    autopanel"
+      "reeldbg   autopanel"
+      "resetrow  autopanel";
+    grid-template-rows: auto auto auto minmax(140px,1fr) auto auto auto auto auto;
+    column-gap:20px; row-gap:6px;
+    max-width:960px; margin:0 auto; padding:12px 18px 20px;
+    max-height:none;
+  }
+  #screenCast.wrap > header{ grid-area:title; padding:0 0 6px; border-bottom:1px solid var(--line); }
+  #screenCast.wrap > header h1{ font-size:13px; }
+  #screenCast.wrap > header p{ font-size:11px; }
+  #screenCast.wrap > .panel{ grid-area:gear; border:none; padding:0; }
+  #status{ grid-area:caststat; margin:6px 0 0; }
+  #castDebugRow{ grid-area:castdbg; margin:4px 0 0; }
+  #reelScene{ grid-area:canvas; width:100%; height:100%; align-self:stretch; }
+  .readouts{ grid-area:readouts; margin:8px 0 0; }
+  #reelStatus{ grid-area:reelstat; margin:6px 0 0; }
+  #bailRigArea{ grid-area:bail; padding:6px 0 0; }
+  #wheelRigArea{ grid-area:wheel; padding:0; }
+  #iceboxWrap{ grid-area:icebox; margin:8px 0 0; }
+  #reelDebugRow{ grid-area:reeldbg; margin:6px 0 0; }
+  #reelControlsRow{ grid-area:resetrow; }
+  #castControlsRow{ grid-area:autobtn; margin:6px 0 0; }
+  #simPanel{ grid-area:autopanel; margin:6px 0 0; }
+  #screenCast.wrap > footer{ display:none; }
+}
 </style>
 </head>
 <body>
@@ -163,8 +201,8 @@
 <!-- ======================= SCREEN 1: CASTING ======================= -->
 <div class="wrap" id="screenCast">
   <header>
-    <h1>Cast Formula — Prototype v2</h1>
-    <p>Full gear matrix. No backlash, no force ceiling — whip as hard as you want. Distance is capped at 350ft and driven entirely by how well your setup matches the swing.</p>
+    <h1>Saltwater Shore Fishing Simulator — Prototype</h1>
+    <p>Choose your set-up based on the type of saltwater fish you want like in real life. Then cast your lure by whipping your phone while holding the cast button. Casting distance is entirely dependant on how well your setup matches your whip. Once you have casted, you can either let your lure slowly sink to the bottom where you can start jigging by jigging your phone like a rod, or you can slowly reel in to simulate trolling, or you may do both! There is also a current that will affect the trajectory of your lure. Your caught fishes will be in your icebox on the bottom. Good luck!</p>
   </header>
 
   <div class="panel">
@@ -256,12 +294,12 @@
   <div class="breakdown" id="breakdown"></div>
   <button id="goReelBtn">Reel It In →</button>
 
-  <div class="debug">
+  <div class="debug" id="castDebugRow">
     <span id="dbgEvents">devicemotion events: 0</span>
     <span id="dbgSecure">secure context: —</span>
   </div>
 
-  <div class="controls">
+  <div class="controls" id="castControlsRow">
     <button id="simBtn" class="btn-ghost" style="flex:1;">Auto Cast</button>
   </div>
   <div class="sim-panel" id="simPanel">
@@ -297,7 +335,7 @@
 
   <div class="status" id="reelStatus">Bail closed. Hold the arc button while you wind up to prepare a cast.</div>
 
-  <div class="rig-area">
+  <div class="rig-area" id="bailRigArea">
     <button id="reelBailBtn" aria-label="Toggle bail">
       <svg viewBox="0 0 140 70" width="140" height="70">
         <path d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="#47605c" stroke-width="10" stroke-linecap="round"/>
@@ -306,7 +344,7 @@
       </svg>
     </button>
   </div>
-  <div class="rig-area" style="padding-top:0;">
+  <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
     <div id="reelWheel"><div class="dial-rotor" id="dialRotor"></div><div class="wheel-label">reel wheel</div></div>
   </div>
 
@@ -325,14 +363,14 @@
     </div>
   </div>
 
-  <div class="debug">
+  <div class="debug" id="reelDebugRow">
     <span id="rDbgEvents">devicemotion: 0</span>
     <span id="rDbgSecure">secure: —</span>
     <span id="rDbgAccel">accel: 0.0</span>
     <span id="rDbgHaptic">vibrate: —</span>
   </div>
 
-  <div class="controls">
+  <div class="controls" id="reelControlsRow">
     <button id="reelResetBtn" class="btn-ghost" style="flex:1;">Reset to Landing</button>
   </div>
 
@@ -1076,6 +1114,8 @@
     setStatus(`Line snapped! That ${hookedFish.category} was too much for ${window.fishOnCastControl.lineStrength}lb test.`, 'bad');
     clearInterval(fightHapticTimer);
     hookedFish=null; fishRunning=false;
+    recastPending=true;
+    setTimeout(fullReset, 1300);
   }
   function landFish(){
     const f=hookedFish;
@@ -1231,6 +1271,7 @@
   let castHoldPointer=false;
   bailBtn.addEventListener('pointerdown', e=>{
     e.preventDefault();
+    try{ bailBtn.setPointerCapture(e.pointerId); }catch(err){}
     if(!castActive){
       castHoldPointer=true; bailOpen=true;
       window.fishOnCastControl.bailHeld=true;
@@ -1544,18 +1585,23 @@
     ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1; ctx.stroke();
     if(hookedFish){
       const size = Math.max(8, Math.min(24, 7+hookedFish.weight*0.7));
-      if(hookedPhoto){
+      let photoDrawn = false;
+      if(hookedPhoto && hookedPhoto.drawW>0 && hookedPhoto.drawH>0){
         // Source photos face left by default. Flip horizontally when swimming
         // away from shore, and tilt to match actual rise/dive — the flip has to
         // negate the tilt angle too, since mirroring the x-axis also reverses
         // which way a given rotation appears to turn.
-        ctx.save();
-        ctx.translate(lureX, lureY);
-        if(fishFacingFlip) ctx.scale(-1,1);
-        ctx.rotate(fishFacingFlip ? -fishTiltAngle : fishTiltAngle);
-        ctx.drawImage(hookedPhoto.source, -hookedPhoto.drawW/2, -hookedPhoto.drawH/2, hookedPhoto.drawW, hookedPhoto.drawH);
-        ctx.restore();
-      } else {
+        try{
+          ctx.save();
+          ctx.translate(lureX, lureY);
+          if(fishFacingFlip) ctx.scale(-1,1);
+          ctx.rotate(fishFacingFlip ? -fishTiltAngle : fishTiltAngle);
+          ctx.drawImage(hookedPhoto.source, -hookedPhoto.drawW/2, -hookedPhoto.drawH/2, hookedPhoto.drawW, hookedPhoto.drawH);
+          ctx.restore();
+          photoDrawn = true;
+        }catch(e){ ctx.restore(); photoDrawn = false; }
+      }
+      if(!photoDrawn){
         drawFishIcon(lureX, lureY, size, '#e8b04a', distanceFt<200, '#7a4a10');
       }
     } else {
