@@ -111,6 +111,18 @@
   .rig-area{display:flex;align-items:center;justify-content:center;gap:18px;padding:14px;}
   #reelBailBtn{width:140px;height:76px;background:transparent;border:none;cursor:pointer;padding:0;}
   #reelWheel{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #384b48, #1a2422 70%);border:3px solid #47605c;position:relative;touch-action:none;}
+  #jigLeverWrap{display:flex;flex-direction:column;align-items:center;gap:6px;margin-left:22px;}
+  .jig-track{
+    width:16px;height:105px;border-radius:8px;
+    background:linear-gradient(180deg,#243532,#1a2422);
+    border:2px solid #47605c;position:relative;touch-action:none;cursor:pointer;
+  }
+  .jig-handle{
+    position:absolute;left:50%;bottom:4px;transform:translate(-50%,0);
+    width:34px;height:8px;border-radius:4px;background:var(--accent);
+    box-shadow:0 2px 4px rgba(0,0,0,0.4);transition:none;
+  }
+  .jig-lever-label{font-size:10px;color:#9fb0b0;text-align:center;letter-spacing:0.02em;}
   #reelWheel .dial-rotor{position:absolute;inset:0;transform-origin:50% 50%;}
   #reelWheel .dial-rotor::after{content:'';position:absolute;top:8px;left:50%;width:4px;height:20px;background:var(--accent);transform:translateX(-50%);border-radius:2px;}
   .wheel-label{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:10px;color:#9fb0b0;pointer-events:none;}
@@ -346,6 +358,12 @@
   </div>
   <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
     <div id="reelWheel"><div class="dial-rotor" id="dialRotor"></div><div class="wheel-label">reel wheel</div></div>
+    <div id="jigLeverWrap">
+      <div class="jig-track" id="jigTrack">
+        <div class="jig-handle" id="jigHandle"></div>
+      </div>
+      <div class="jig-lever-label">Manual Jig</div>
+    </div>
   </div>
 
   <div class="icebox-wrap" id="iceboxWrap">
@@ -1366,6 +1384,53 @@
     setStatus('Jig! Lure popped up and toward shore, now falling again.', '');
     window.fishOnHaptic(15);
   }
+
+  // ---- manual jig lever (fallback when motion isn't available) ----
+  const jigTrack=document.getElementById('jigTrack'), jigHandle=document.getElementById('jigHandle');
+  const JIG_TRACK_TRAVEL_FT = 15; // conceptual feet of "drop" the full lever travel represents
+  let jigDragging=false, jigFrac=0, jigFallAnim=null;
+  function setJigHandleFrac(f){
+    jigFrac=Math.max(0,Math.min(1,f));
+    const travelPx = jigTrack.clientHeight - jigHandle.offsetHeight - 8;
+    jigHandle.style.transform = 'translate(-50%,'+(-jigFrac*travelPx)+'px)';
+  }
+  function jigPointerFrac(e){
+    const rect=jigTrack.getBoundingClientRect();
+    const f = (rect.bottom - e.clientY) / rect.height;
+    return Math.max(0, Math.min(1, f));
+  }
+  jigTrack.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    if(jigFallAnim) cancelAnimationFrame(jigFallAnim);
+    jigDragging=true;
+    try{ jigTrack.setPointerCapture(e.pointerId); }catch(err){}
+    setJigHandleFrac(jigPointerFrac(e));
+  });
+  jigTrack.addEventListener('pointermove', e=>{
+    if(!jigDragging) return;
+    setJigHandleFrac(jigPointerFrac(e));
+  });
+  function endJigDrag(){
+    if(!jigDragging) return;
+    jigDragging=false;
+    if(jigFrac > 0.18){ tryJig(10 + jigFrac*30); }
+    // Handle falls back to rest at the same rate the lure actually sinks —
+    // heavier lures fall (and the lever resets) faster than light ones.
+    const sinkRate = sinkRateFtPerSec(lureOz);
+    const fullFallMs = (JIG_TRACK_TRAVEL_FT/sinkRate)*1000;
+    const duration = fullFallMs * jigFrac;
+    const startFrac = jigFrac, startTs = performance.now();
+    function fall(ts){
+      const t = duration>0 ? Math.min(1, (ts-startTs)/duration) : 1;
+      setJigHandleFrac(startFrac*(1-t));
+      if(t<1) jigFallAnim = requestAnimationFrame(fall);
+      else { setJigHandleFrac(0); jigFallAnim=null; }
+    }
+    jigFallAnim = requestAnimationFrame(fall);
+  }
+  jigTrack.addEventListener('pointerup', endJigDrag);
+  jigTrack.addEventListener('pointercancel', endJigDrag);
+  setJigHandleFrac(0);
 
   // ---- physics loop ----
   function tick(ts){
