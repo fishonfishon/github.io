@@ -2438,26 +2438,24 @@
     });
   }
 
-  if(supabaseClient){
+if(supabaseClient){
     supabaseClient.auth.onAuthStateChange(async (event, session)=>{
-      if(session && event === 'SIGNED_IN') {
+      if(session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         hideAuthModal();
         await checkAndPromptUsername();
-      }
-      await updateAccountUI(session);
-      if(session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         if(typeof loadUserCatches === 'function') loadUserCatches();
       }
+      await updateAccountUI(session);
     });
 
     supabaseClient.auth.getSession().then(async ({data})=>{
       if(data.session) {
         await checkAndPromptUsername();
+        if(typeof loadUserCatches === 'function') {
+          loadUserCatches();
+        }
       }
       await updateAccountUI(data.session);
-      if(data.session && typeof loadUserCatches === 'function') {
-        loadUserCatches();
-      }
     });
   } else {
     updateAccountUI(null);
