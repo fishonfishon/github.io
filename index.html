@@ -2274,14 +2274,17 @@
 
     if (!data || !data.username) {
       let chosenName = prompt("Welcome to FOFO! Please choose a unique account name:");
+      if (chosenName === null) return;
+
       while (!chosenName || chosenName.trim() === "") {
         chosenName = prompt("Account name cannot be empty. Please choose a unique account name:");
+        if (chosenName === null) return;
       }
 
       const result = await setUsername(chosenName.trim());
       if (!result.success) {
         alert(result.error);
-        checkAndPromptUsername(); // Loop back if taken/failed
+        await checkAndPromptUsername(); // Loop back if taken/failed
       } else {
         alert("Account name set successfully!");
       }
@@ -2289,11 +2292,23 @@
   }
   // --------------------------------
 
-  function updateAccountUI(session){
+  async function updateAccountUI(session){
     if(!accountBtn) return;
     if(session && session.user){
-      const label = session.user.email || session.user.user_metadata?.name || 'Account';
-      accountBtn.textContent = '👤 ' + label.split('@')[0];
+      let displayName = session.user.email ? session.user.email.split('@')[0] : 'Account';
+      
+      // Fetch the unique custom handle from profiles table
+      const { data } = await supabaseClient
+        .from('profiles')
+        .select('username')
+        .eq('id', session.user.id)
+        .single();
+        
+      if(data && data.username) {
+        displayName = data.username;
+      }
+
+      accountBtn.textContent = '👤 ' + displayName;
       accountBtn.dataset.loggedIn = 'true';
     } else {
       accountBtn.textContent = '👤 Sign In';
@@ -2425,21 +2440,23 @@
 
   if(supabaseClient){
     supabaseClient.auth.onAuthStateChange(async (event, session)=>{
-      updateAccountUI(session);
       if(session && event === 'SIGNED_IN') {
         hideAuthModal();
         await checkAndPromptUsername();
+      }
+      await updateAccountUI(session);
+      if(session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         if(typeof loadUserCatches === 'function') loadUserCatches();
       }
     });
 
     supabaseClient.auth.getSession().then(async ({data})=>{
-      updateAccountUI(data.session);
       if(data.session) {
         await checkAndPromptUsername();
-        if(typeof loadUserCatches === 'function') {
-          loadUserCatches();
-        }
+      }
+      await updateAccountUI(data.session);
+      if(data.session && typeof loadUserCatches === 'function') {
+        loadUserCatches();
       }
     });
   } else {
