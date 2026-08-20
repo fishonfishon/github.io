@@ -1553,37 +1553,40 @@
     }
   }
 
-  async function loadUserCatches() {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+// Put loadUserCatches globally at the root script level
+async function loadUserCatches() {
+  if (typeof window.supabaseClient === 'undefined' || !window.supabaseClient) return;
 
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session || !session.user) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session || !session.user) return;
 
-    const { data, error } = await supabaseClient
-      .from('FOFO Catch History')
-      .select('*')
-      .eq('player_id', session.user.id)
-      .order('created_at', { ascending: false });
+  const { data, error } = await window.supabaseClient
+    .from('FOFO Catch History')
+    .select('*')
+    .eq('player_id', session.user.id)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Failed to load historical catches:', error.message);
-      return;
-    }
+  if (error) {
+    console.error('Failed to load historical catches:', error.message);
+    return;
+  }
 
-    iceboxLog.length = 0; // Clear local array while keeping reference
-    
+  if (typeof iceboxLog !== 'undefined') {
+    iceboxLog.length = 0;
     if (data) {
       data.forEach(row => {
         iceboxLog.push({
           species: { name: row.fish_type },
           weight: row.weight_lb,
-          tier: 'Standard' // Fallback tier for historical rows
+          tier: 'Standard'
         });
       });
     }
-
-    renderIcebox();
+    if (typeof renderIcebox === 'function') {
+      renderIcebox();
+    }
   }
+}
 
   function renderIcebox(){
     const row = document.getElementById('iceboxRow');
@@ -2444,7 +2447,6 @@ if(supabaseClient){
         hideAuthModal();
         await checkAndPromptUsername();
         if(typeof loadUserCatches === 'function') {
-          console.log("Triggering loadUserCatches from auth state change...");
           loadUserCatches();
         }
       }
@@ -2455,8 +2457,7 @@ if(supabaseClient){
       if(data.session) {
         await checkAndPromptUsername();
         if(typeof loadUserCatches === 'function') {
-          console.log("Triggering loadUserCatches from getSession...");
-          loadUserCatches();
+          loadUserCatches(); // This ensures it fires right when the session is verified on page load
         }
       }
       await updateAccountUI(data.session);
@@ -2466,18 +2467,6 @@ if(supabaseClient){
   }
 })(); // <--- Ends your IIFE (Immediately Invoked Function Expression)
 
-// --- ADD THIS RIGHT AT THE VERY BOTTOM OF YOUR FILE ---
-window.addEventListener('DOMContentLoaded', async () => {
-  if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session && session.user) {
-      console.log("DOM loaded: fetching user catches...");
-      if (typeof loadUserCatches === 'function') {
-        loadUserCatches();
-      }
-    }
-  }
-});
 </script>
 </body>
 </html>
