@@ -173,14 +173,13 @@
   #muteSfxBtn{ right:8px; }
   #muteBgBtn.muted, #muteSfxBtn.muted{ color:#7f8f8f; }
 
-  #accountBtn{
-    position:fixed; top:8px; left:8px; z-index:90;
-    height:34px; padding:0 12px; border-radius:17px; border:1px solid var(--line);
-    background:rgba(20,30,32,0.85); color:var(--paper); font-size:12px; font-weight:700;
-    display:flex; align-items:center; gap:5px; cursor:pointer;
-    box-shadow:0 2px 6px rgba(0,0,0,0.3); max-width:150px; overflow:hidden;
-    white-space:nowrap; text-overflow:ellipsis;
-  }
+  #accountBtn {
+  height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--line);
+  background: rgba(20,30,32,0.85); color: var(--paper); font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; gap: 5px; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3); max-width: 150px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
   #authModal{
     position:fixed; inset:0; z-index:95; background:rgba(0,0,0,0.55);
     display:none; align-items:center; justify-content:center; padding:20px;
@@ -259,10 +258,10 @@
 <body>
 
 <div id="hapticFlash"></div>
-<div style="position: relative; display: inline-block;">
+<div id="accountContainer" style="position: fixed; top: 8px; left: 8px; z-index: 90;">
   <button id="accountBtn" aria-label="Account">👤 Sign In</button>
-  <div id="accountDropdown" style="display: none; position: absolute; right: 0; top: 100%; background: #1a1a1a; border: 1px solid #333; padding: 8px; border-radius: 6px; z-index: 1000;">
-    <button id="signOutBtn" style="background: #d9534f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Sign Out</button>
+  <div id="accountDropdown" style="display: none; position: absolute; left: 0; top: 100%; margin-top: 5px; background: #1a1a1a; border: 1px solid #333; padding: 8px; border-radius: 6px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+    <button id="signOutBtn" style="background: #d9534f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap;">Sign Out</button>
   </div>
 </div>
 <button id="muteBgBtn" aria-label="Toggle background sound">🌊</button>
