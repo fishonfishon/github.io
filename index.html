@@ -1646,6 +1646,19 @@ window.loadUserCatches = async function loadUserCatches() {
         e.stopPropagation();
         if(typeof buildFishVisual === 'function' && typeof showCatchPopup === 'function') {
           const visual = buildFishVisual(entry.species, entry.tier, 1.4);
+          
+          // --- CONSTRAIN THE VISUAL SIZE ---
+          if (visual) {
+            visual.style.maxWidth = '280px';
+            visual.style.maxHeight = '280px';
+            visual.style.width = '100%';
+            visual.style.height = 'auto';
+            visual.style.objectFit = 'contain';
+            visual.style.display = 'block';
+            visual.style.margin = '0 auto 12px auto';
+          }
+          // ---------------------------------
+
           const displayName = (typeof entry.species === 'object' && entry.species !== null) ? entry.species.name : entry.species;
           showCatchPopup(
             visual,
