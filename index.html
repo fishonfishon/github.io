@@ -2146,6 +2146,8 @@
   }
 
   const accountBtn = document.getElementById('accountBtn');
+  const accountDropdown = document.getElementById('accountDropdown');
+  const signOutBtn = document.getElementById('signOutBtn');
   const authModal = document.getElementById('authModal');
   const authTitle = document.getElementById('authTitle');
   const authEmail = document.getElementById('authEmail');
@@ -2175,20 +2177,38 @@
     } else {
       accountBtn.textContent = '👤 Sign In';
       accountBtn.dataset.loggedIn = 'false';
+      if(accountDropdown) accountDropdown.style.display = 'none';
     }
   }
 
-  accountBtn.addEventListener('click', async ()=>{
+  // Handle main button click: Toggle dropdown if logged in, show modal if logged out
+  accountBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
     if(!supabaseClient){
       alert('Supabase isn\'t configured yet.');
       return;
     }
     if(accountBtn.dataset.loggedIn==='true'){
-      await supabaseClient.auth.signOut();
+      if(accountDropdown){
+        accountDropdown.style.display = accountDropdown.style.display === 'block' ? 'none' : 'block';
+      }
     } else {
       setAuthMode('signin');
       showAuthModal();
     }
+  });
+
+  // Handle explicit Sign Out click from dropdown
+  if(signOutBtn){
+    signOutBtn.addEventListener('click', async ()=>{
+      if(accountDropdown) accountDropdown.style.display = 'none';
+      await supabaseClient.auth.signOut();
+    });
+  }
+
+  // Close dropdown when clicking outside
+  window.addEventListener('click', ()=>{
+    if(accountDropdown) accountDropdown.style.display = 'none';
   });
 
   document.getElementById('authCloseBtn').addEventListener('click', hideAuthModal);
@@ -2214,8 +2234,7 @@
       } else {
         const { error } = await supabaseClient.auth.signUp({ email, password });
         if(error) throw error;
-        authError.style.color = 'var(--ok)';
-        authError.textContent = 'Check your email to confirm your account, then sign in.';
+        hideAuthModal();
       }
     }catch(err){
       authError.style.color = 'var(--bad)';
@@ -2225,15 +2244,17 @@
   });
 
   function wireOAuthButton(id, provider){
-    document.getElementById(id).addEventListener('click', async ()=>{
-      if(!supabaseClient) return;
-      // Explicitly set clean origin redirect so it lands back on the game page cleanly
-      const { error } = await supabaseClient.auth.signInWithOAuth({ 
-        provider, 
-        options:{ redirectTo: window.location.origin + window.location.pathname } 
+    const btn = document.getElementById(id);
+    if(btn){
+      btn.addEventListener('click', async ()=>{
+        if(!supabaseClient) return;
+        const { error } = await supabaseClient.auth.signInWithOAuth({ 
+          provider, 
+          options:{ redirectTo: window.location.origin + window.location.pathname } 
+        });
+        if(error){ authError.style.color='var(--bad)'; authError.textContent = error.message; }
       });
-      if(error){ authError.style.color='var(--bad)'; authError.textContent = error.message; }
-    });
+    }
   }
   wireOAuthButton('googleSignInBtn', 'google');
 
@@ -2243,7 +2264,6 @@
       if(session && event === 'SIGNED_IN') hideAuthModal();
     });
 
-    // Check existing session or process incoming OAuth token code block
     supabaseClient.auth.getSession().then(({data})=>{
       updateAccountUI(data.session);
     });
