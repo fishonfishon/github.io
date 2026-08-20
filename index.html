@@ -222,15 +222,14 @@
     grid-template-columns: 1.6fr 1fr;
     grid-template-areas:
       "title     gear"
-      "caststat  gear"
-      "castdbg   reelstat"
+      "reelstat  gear"
       "canvas    bail"
       "canvas    wheel"
       "readouts  autobtn"
       "icebox    autopanel"
       "reeldbg   autopanel"
       "resetrow  autopanel";
-    grid-template-rows: auto auto auto minmax(140px,1fr) auto auto auto auto auto;
+    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto;
     column-gap:20px; row-gap:6px;
     max-width:960px; margin:0 auto; padding:12px 18px 20px;
     max-height:none;
@@ -239,8 +238,6 @@
   #screenCast.wrap > header h1{ font-size:13px; }
   #screenCast.wrap > header p{ font-size:11px; }
   #screenCast.wrap > .panel{ grid-area:gear; border:none; padding:0; }
-  #status{ grid-area:caststat; margin:6px 0 0; }
-  #castDebugRow{ grid-area:castdbg; margin:4px 0 0; }
   #reelScene{ grid-area:canvas; width:100%; height:100%; align-self:stretch; }
   .readouts{ grid-area:readouts; margin:8px 0 0; }
   #reelStatus{ grid-area:reelstat; margin:6px 0 0; }
@@ -382,14 +379,8 @@
     <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
   </div>
 
-  <div class="status" id="status">Set your gear, enable motion, and whip the phone forward like a real cast.</div>
   <div class="breakdown" id="breakdown"></div>
   <button id="goReelBtn">Reel It In →</button>
-
-  <div class="debug" id="castDebugRow">
-    <span id="dbgEvents">devicemotion events: 0</span>
-    <span id="dbgSecure">secure context: —</span>
-  </div>
 
   <div class="controls" id="castControlsRow">
     <button id="simBtn" class="btn-ghost" style="flex:1;">Manual Cast and Jig</button>
@@ -787,7 +778,6 @@
   document.getElementById('lineStrength').addEventListener('change', e=>{ lineStrength=parseInt(e.target.value); window.fishOnCastControl.lineStrength=lineStrength; });
   document.getElementById('lureWeight').addEventListener('change', e=>lureOz=parseFloat(e.target.value));
 
-  const statusEl=document.getElementById('status');
   const breakdownEl=document.getElementById('breakdown');
   const peakReadout=document.getElementById('peakReadout');
   const meterFill=document.getElementById('meterFill');
@@ -862,8 +852,7 @@
     breakdownEl.innerHTML = '<div><span>Line vs lure</span><span>UNDERRATED</span></div>' +
       '<div><span>'+lineStrength+'lb line, '+lureOz+'oz lure</span><span>needs ~'+rec+'lb+</span></div>' +
       '<div class="total"><span>Result</span><span>LINE SNAPPED</span></div>';
-    statusEl.textContent = `Line snapped! A ${lureOz}oz lure on ${lineStrength}lb test can't survive that hard a release — the shock load broke it. Step up to around ${rec}lb+ for this lure, or ease off the whip.`;
-    statusEl.className='status bad';
+    window.fishOnSetStatus(`Line snapped! A ${lureOz}oz lure on ${lineStrength}lb test can't survive that hard a release — the shock load broke it. Step up to around ${rec}lb+ for this lure, or ease off the whip.`, 'bad');
     setTimeout(()=>{ lure.snapped=false; casting=false; }, 1200);
   }
 
@@ -872,12 +861,11 @@
     lure.from=0.06; lure.to=0.08+(distMeters/MAX_DIST)*0.86;
     lure.flying=true; lure.dur=(700+distMeters*3)*1.3; lure._start=null;
     requestAnimationFrame(()=>animLoop(()=>{
-      statusEl.textContent = distMeters<20
+      window.fishOnSetStatus(distMeters<20
         ? `Short cast — only ${distMeters.toFixed(0)}ft. Gear mismatch or weak swing is costing you distance — check the breakdown above.`
         : distMeters>380
           ? `Excellent — ${distMeters.toFixed(0)}ft, right at the edge of realistic range.`
-          : `${distMeters.toFixed(0)}ft out.`;
-      statusEl.className='status ok';
+          : `${distMeters.toFixed(0)}ft out.`, 'ok');
       lastCastDistance = distMeters;
       window.startReelPhase(distMeters, lureOz);
       casting=false;
@@ -942,14 +930,12 @@
   setInterval(()=>{ if(!casting) drawScene(); }, 250);
 
   let motionActive=false, eventCount=0;
-  const dbgEvents=document.getElementById('dbgEvents'), dbgSecure=document.getElementById('dbgSecure');
-  dbgSecure.textContent='secure context: '+(window.isSecureContext?'yes':'NO — motion will not work');
   window.fishOnIsMotionActive = function(){ return motionActive; };
 
   function startMotion(){
     if(motionActive) return;
     window.addEventListener('devicemotion', e=>{
-      eventCount++; dbgEvents.textContent='devicemotion events: '+eventCount;
+      eventCount++;
       const a=(e.acceleration && e.acceleration.x!==null) ? e.acceleration : e.accelerationIncludingGravity;
       if(!a) return;
       const x=a.x||0,y=a.y||0,z=a.z||0;
@@ -958,8 +944,7 @@
       handleAccelSample(mag);
     });
     motionActive=true;
-    statusEl.textContent='Motion sensors live. Whip the phone forward like a rod cast.';
-    statusEl.className='status';
+    window.fishOnSetStatus('Motion sensors live. Whip the phone forward like a rod cast.', '');
   }
   // Exposed for both the top-of-page iPhone button and the bail-hold gesture to
   // call directly — either is a valid direct user gesture for requestPermission().
@@ -970,11 +955,11 @@
       try{
         const res=await DeviceMotionEvent.requestPermission();
         if(res==='granted'){ startMotion(); return 'granted'; }
-        statusEl.textContent='Motion permission denied — use "Auto Cast" instead.'; statusEl.className='status';
+        window.fishOnSetStatus('Motion permission denied — use "Auto Cast" instead.', '');
         return 'denied';
-      }catch(err){ statusEl.textContent='Permission error: '+err.message; return 'denied'; }
+      }catch(err){ window.fishOnSetStatus('Permission error: '+err.message, ''); return 'denied'; }
     } else if(window.DeviceMotionEvent){ startMotion(); return 'granted'; }
-    statusEl.textContent='No motion API here — use "Auto Cast" below.';
+    window.fishOnSetStatus('No motion API here — use "Auto Cast" below.', '');
     return 'unavailable';
   };
 
@@ -1707,6 +1692,7 @@ window.loadUserCatches = async function loadUserCatches() {
   const transferInfo=document.getElementById('rTransferInfo');
 
   function setStatus(t,cls){ statusEl.textContent='Coach: '+t; statusEl.className='status'+(cls?' '+cls:''); }
+  window.fishOnSetStatus = setStatus;
   function updateReadouts(){
     roDepth.textContent=depthFt.toFixed(0)+' ft';
     roDist.textContent=distanceFt.toFixed(0)+' ft';
