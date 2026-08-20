@@ -1555,12 +1555,23 @@
 
 // Put loadUserCatches globally at the root script level
 async function loadUserCatches() {
-  if (typeof window.supabaseClient === 'undefined' || !window.supabaseClient) return;
+  console.log("loadUserCatches called...");
+  
+  const client = window.supabaseClient || supabaseClient;
+  if (typeof client === 'undefined' || !client) {
+    console.log("Supabase client not found.");
+    return;
+  }
 
-  const { data: { session } } = await window.supabaseClient.auth.getSession();
-  if (!session || !session.user) return;
+  const { data: { session } } = await client.auth.getSession();
+  if (!session || !session.user) {
+    console.log("No active session found during load.");
+    return;
+  }
 
-  const { data, error } = await window.supabaseClient
+  console.log("Fetching catches for user ID:", session.user.id);
+
+  const { data, error } = await client
     .from('FOFO Catch History')
     .select('*')
     .eq('player_id', session.user.id)
@@ -1570,6 +1581,8 @@ async function loadUserCatches() {
     console.error('Failed to load historical catches:', error.message);
     return;
   }
+
+  console.log("Data retrieved from Supabase:", data);
 
   if (typeof iceboxLog !== 'undefined') {
     iceboxLog.length = 0;
@@ -1585,6 +1598,7 @@ async function loadUserCatches() {
     if (typeof renderIcebox === 'function') {
       renderIcebox();
     }
+    console.log("Icebox rendered with items:", iceboxLog.length);
   }
 }
 
