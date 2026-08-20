@@ -259,7 +259,12 @@
 <body>
 
 <div id="hapticFlash"></div>
-<button id="accountBtn" aria-label="Account">👤 Sign In</button>
+<div style="position: relative; display: inline-block;">
+  <button id="accountBtn" aria-label="Account">👤 Sign In</button>
+  <div id="accountDropdown" style="display: none; position: absolute; right: 0; top: 100%; background: #1a1a1a; border: 1px solid #333; padding: 8px; border-radius: 6px; z-index: 1000;">
+    <button id="signOutBtn" style="background: #d9534f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Sign Out</button>
+  </div>
+</div>
 <button id="muteBgBtn" aria-label="Toggle background sound">🌊</button>
 <button id="muteSfxBtn" aria-label="Toggle sound effects">🔊</button>
 
