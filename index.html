@@ -2269,7 +2269,8 @@
       }
       if(accountBtn.dataset.loggedIn==='true'){
         if(accountDropdown){
-          accountDropdown.style.display = accountDropdown.style.display === 'block' ? 'none' : 'block';
+          const isVisible = accountDropdown.style.display === 'block';
+          accountDropdown.style.display = isVisible ? 'none' : 'block';
         }
       } else {
         setAuthMode('signin');
@@ -2278,9 +2279,17 @@
     });
   }
 
+  // Prevent clicks inside the dropdown from closing it
+  if(accountDropdown){
+    accountDropdown.addEventListener('click', (e)=>{
+      e.stopPropagation();
+    });
+  }
+
   // Handle explicit Sign Out click from dropdown
   if(signOutBtn){
-    signOutBtn.addEventListener('click', async ()=>{
+    signOutBtn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
       if(accountDropdown) accountDropdown.style.display = 'none';
       await supabaseClient.auth.signOut();
       // Clear icebox on manual sign out
