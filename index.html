@@ -1518,39 +1518,82 @@
 
   // ---------------- Icebox: in-memory catch log, resets on page reload ----------------
   const iceboxLog = [];
-  function addToIcebox(species, weight, tier){
+  
+  async function addToIcebox(species, weight, tier){
     iceboxLog.unshift({ species, weight, tier });
     renderIcebox();
+
+    // Sync catch to Supabase if a user is logged in
+    try {
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        
+        if (session && session.user) {
+          const fishName = typeof species === 'object' && species !== null ? (species.name || 'Unknown Fish') : species;
+          
+          const { error } = await supabaseClient
+            .from('FOFO Catch History')
+            .insert([
+              {
+                player_id: session.user.id,
+                fish_type: fishName,
+                weight_lb: weight,
+                lure_used: window.currentLureName || 'Unknown Lure',
+                depth_ft: window.currentDepthFt || 0
+              }
+            ]);
+
+          if (error) {
+            console.error('Failed to save catch to cloud:', error.message);
+          } else {
+            console.log('Catch successfully synced to Supabase!');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in cloud sync:', err);
+    }
   }
+
   function renderIcebox(){
     const row = document.getElementById('iceboxRow');
     const count = document.getElementById('iceboxCount');
     const empty = document.getElementById('iceboxEmpty');
-    count.textContent = '('+iceboxLog.length+')';
-    empty.style.display = iceboxLog.length ? 'none' : 'block';
+    if(count) count.textContent = '('+iceboxLog.length+')';
+    if(empty) empty.style.display = iceboxLog.length ? 'none' : 'block';
+    if(!row) return;
     row.innerHTML = '';
     iceboxLog.forEach(entry=>{
       const item = document.createElement('div');
       item.className='icebox-list-item';
       const thumb = document.createElement('div');
       thumb.className='thumb';
-      thumb.appendChild(buildFishThumbnail(entry.species));
+      if(typeof buildFishThumbnail === 'function') {
+        thumb.appendChild(buildFishThumbnail(entry.species));
+      }
       const info = document.createElement('div');
       info.className='info';
       const name = document.createElement('div');
-      name.className='name'; name.textContent = entry.species.name;
+      name.className='name'; 
+      name.textContent = (typeof entry.species === 'object' && entry.species !== null) ? entry.species.name : entry.species;
       const wt = document.createElement('div');
-      wt.className='wt'; wt.textContent = entry.weight.toFixed(1)+' lb · '+entry.tier;
-      info.appendChild(name); info.appendChild(wt);
-      item.appendChild(thumb); item.appendChild(info);
+      wt.className='wt'; 
+      wt.textContent = entry.weight.toFixed(1)+' lb · '+entry.tier;
+      info.appendChild(name); 
+      info.appendChild(wt);
+      item.appendChild(thumb); 
+      item.appendChild(info);
       item.addEventListener('click', (e)=>{
         e.stopPropagation();
-        const visual = buildFishVisual(entry.species, entry.tier, 1.4);
-        showCatchPopup(
-          visual,
-          `<div style="font-size:21px;">${entry.species.name}</div><div style="font-size:18px;color:#9fb0b0;font-weight:400;margin-top:4px;">${entry.weight.toFixed(1)} lb · ${entry.tier}</div>`,
-          'enlarged', 3400
-        );
+        if(typeof buildFishVisual === 'function' && typeof showCatchPopup === 'function') {
+          const visual = buildFishVisual(entry.species, entry.tier, 1.4);
+          const displayName = (typeof entry.species === 'object' && entry.species !== null) ? entry.species.name : entry.species;
+          showCatchPopup(
+            visual,
+            `<div style="font-size:21px;">${displayName}</div><div style="font-size:18px;color:#9fb0b0;font-weight:400;margin-top:4px;">${entry.weight.toFixed(1)} lb · ${entry.tier}</div>`,
+            'enlarged', 3400
+          );
+        }
       });
       row.appendChild(item);
     });
