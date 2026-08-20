@@ -2443,7 +2443,10 @@ if(supabaseClient){
       if(session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         hideAuthModal();
         await checkAndPromptUsername();
-        if(typeof loadUserCatches === 'function') loadUserCatches();
+        if(typeof loadUserCatches === 'function') {
+          console.log("Triggering loadUserCatches from auth state change...");
+          loadUserCatches();
+        }
       }
       await updateAccountUI(session);
     });
@@ -2452,6 +2455,7 @@ if(supabaseClient){
       if(data.session) {
         await checkAndPromptUsername();
         if(typeof loadUserCatches === 'function') {
+          console.log("Triggering loadUserCatches from getSession...");
           loadUserCatches();
         }
       }
