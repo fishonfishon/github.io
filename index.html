@@ -2464,7 +2464,20 @@ if(supabaseClient){
   } else {
     updateAccountUI(null);
   }
-})();
+})(); // <--- Ends your IIFE (Immediately Invoked Function Expression)
+
+// --- ADD THIS RIGHT AT THE VERY BOTTOM OF YOUR FILE ---
+window.addEventListener('DOMContentLoaded', async () => {
+  if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session && session.user) {
+      console.log("DOM loaded: fetching user catches...");
+      if (typeof loadUserCatches === 'function') {
+        loadUserCatches();
+      }
+    }
+  }
+});
 </script>
 </body>
 </html>
