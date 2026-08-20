@@ -1558,21 +1558,11 @@
 
 // Put loadUserCatches globally at the root script level
 window.loadUserCatches = async function loadUserCatches() {
-  console.log("loadUserCatches called...");
-  
   const client = window.supabaseClient || supabaseClient;
-  if (typeof client === 'undefined' || !client) {
-    console.log("Supabase client not found.");
-    alert("Supabase client not initialized.");
-    return;
-  }
+  if (!client) return;
 
   const { data: { session } } = await client.auth.getSession();
-  if (!session || !session.user) {
-    console.log("No active session found.");
-    alert("Please sign in to load past catches!");
-    return;
-  }
+  if (!session || !session.user) return;
 
   const { data, error } = await client
     .from('FOFO Catch History')
@@ -1582,25 +1572,21 @@ window.loadUserCatches = async function loadUserCatches() {
 
   if (error) {
     console.error('Failed to load historical catches:', error.message);
-    alert('Failed to load catches: ' + error.message);
     return;
   }
 
   if (typeof iceboxLog !== 'undefined') {
     iceboxLog.length = 0;
-    if (data && data.length > 0) {
+    if (data) {
       data.forEach(row => {
         iceboxLog.push({
           species: { name: row.fish_type },
           weight: row.weight_lb,
-          tier: 'Standard'
+          tier: 'Standard',
+          createdAt: row.created_at // <-- Store the timestamp here
         });
       });
-      console.log(`Successfully loaded ${data.length} catches into icebox.`);
-    } else {
-      console.log("No historical catches found in database for this user.");
     }
-    
     if (typeof renderIcebox === 'function') {
       renderIcebox();
     }
@@ -1615,26 +1601,47 @@ window.loadUserCatches = async function loadUserCatches() {
     if(empty) empty.style.display = iceboxLog.length ? 'none' : 'block';
     if(!row) return;
     row.innerHTML = '';
+    
     iceboxLog.forEach(entry=>{
       const item = document.createElement('div');
       item.className='icebox-list-item';
+      
       const thumb = document.createElement('div');
       thumb.className='thumb';
       if(typeof buildFishThumbnail === 'function') {
         thumb.appendChild(buildFishThumbnail(entry.species));
       }
+      
       const info = document.createElement('div');
       info.className='info';
+      
       const name = document.createElement('div');
       name.className='name'; 
       name.textContent = (typeof entry.species === 'object' && entry.species !== null) ? entry.species.name : entry.species;
+      
       const wt = document.createElement('div');
       wt.className='wt'; 
       wt.textContent = entry.weight.toFixed(1)+' lb · '+entry.tier;
+
+      // Format the timestamp nicely if it exists
+      let timeString = '';
+      if (entry.createdAt) {
+        const date = new Date(entry.createdAt);
+        timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' · ' + date.toLocaleDateString();
+      }
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'catch-time';
+      timeDiv.style.cssText = 'font-size:11px; color:#7a8b99; margin-top:2px;';
+      timeDiv.textContent = timeString;
+
       info.appendChild(name); 
       info.appendChild(wt);
+      if(timeString) info.appendChild(timeDiv); // Add time below weight
+
       item.appendChild(thumb); 
       item.appendChild(info);
+
       item.addEventListener('click', (e)=>{
         e.stopPropagation();
         if(typeof buildFishVisual === 'function' && typeof showCatchPopup === 'function') {
