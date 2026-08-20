@@ -2228,6 +2228,7 @@
   const authPassword = document.getElementById('authPassword');
   const authError = document.getElementById('authError');
   const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
   const authToggleText = document.getElementById('authToggleText');
   const authToggleLink = document.getElementById('authToggleLink');
 
@@ -2246,7 +2247,7 @@
   function updateAccountUI(session){
     if(!accountBtn) return;
     if(session && session.user){
-      const label = session.user.email || 'Account';
+      const label = session.user.email || session.user.user_metadata?.name || 'Account';
       accountBtn.textContent = '🚪 Sign Out (' + label.split('@')[0] + ')';
       accountBtn.dataset.loggedIn = 'true';
     } else {
@@ -2301,6 +2302,7 @@
     });
   }
 
+  // Email/Password Submit Handler
   if(authSubmitBtn){
     authSubmitBtn.addEventListener('click', async ()=>{
       if(!supabaseClient) return;
@@ -2326,6 +2328,27 @@
         }
       }
       authSubmitBtn.disabled = false;
+    });
+  }
+
+  // Google OAuth Login Handler
+  if(googleLoginBtn){
+    googleLoginBtn.addEventListener('click', async ()=>{
+      if(!supabaseClient) return;
+      try{
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if(error) throw error;
+      }catch(err){
+        if(authError){
+          authError.style.color = 'var(--bad)';
+          authError.textContent = err.message || 'Google sign-in failed.';
+        }
+      }
     });
   }
 
