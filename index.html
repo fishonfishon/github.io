@@ -85,6 +85,12 @@
   }
   .sell-btn:active{ opacity:0.8; }
   .sell-btn[disabled]{ background:#8a9a9a; color:#3a4444; cursor:default; }
+  .discard-btn{
+    flex:0 0 auto; margin-left:6px; padding:6px 10px; border-radius:7px;
+    border:1px solid #16262e; background:var(--bad); color:#fff;
+    font-size:11px; font-weight:800; cursor:pointer;
+  }
+  .discard-btn:active{ opacity:0.8; }
   #marketBulletin{
     position:relative; margin:16px 16px 0; padding:14px;
     background:
@@ -1744,25 +1750,72 @@ window.loadUserCatches = async function loadUserCatches() {
     const idx = iceboxLog.indexOf(entry);
     if(idx===-1) return;
     const price = calcSalePrice(entry);
+    const client = window.supabaseClient || supabaseClient;
+
+    // Confirm the remote deletion (if this catch is cloud-synced) BEFORE
+    // touching any local state. Selling and then reloading past catches
+    // before the delete landed — or having it silently fail — was letting
+    // the same fish come back and get sold again, a real duplication exploit.
+    if(client && entry.id){
+      try{
+        const { data: { session } } = await client.auth.getSession();
+        if(session && session.user){
+          const { error: delErr } = await client.from('FOFO Catch History').delete().eq('id', entry.id);
+          if(delErr){
+            console.error('Failed to remove sold catch from history:', delErr.message);
+            setStatus('Could not complete the sale — try again.', 'bad');
+            return; // local state untouched, fish stays sellable
+          }
+        }
+      }catch(err){
+        console.error('Error syncing sale:', err);
+        setStatus('Could not complete the sale — try again.', 'bad');
+        return;
+      }
+    }
+
+    // Remote deletion confirmed (or nothing to sync) — now safe to update locally.
     walletBalance += price;
     updateWalletUI();
     iceboxLog.splice(idx, 1);
     renderIcebox();
     window.fishOnSound && window.fishOnSound.catchSuccess && window.fishOnSound.catchSuccess();
 
-    const client = window.supabaseClient || supabaseClient;
-    if(!client) return;
-    try{
-      const { data: { session } } = await client.auth.getSession();
-      if(session && session.user){
-        if(entry.id){
-          const { error: delErr } = await client.from('FOFO Catch History').delete().eq('id', entry.id);
-          if(delErr) console.error('Failed to remove sold catch from history:', delErr.message);
+    if(client){
+      try{
+        const { data: { session } } = await client.auth.getSession();
+        if(session && session.user){
+          const { error: balErr } = await client.from('FOFO Wallet').upsert({ player_id: session.user.id, balance: walletBalance });
+          if(balErr) console.error('Failed to save wallet balance:', balErr.message);
         }
-        const { error: balErr } = await client.from('FOFO Wallet').upsert({ player_id: session.user.id, balance: walletBalance });
-        if(balErr) console.error('Failed to save wallet balance:', balErr.message);
+      }catch(err){ console.error('Error saving wallet balance:', err); }
+    }
+  }
+  async function discardFish(entry){
+    const idx = iceboxLog.indexOf(entry);
+    if(idx===-1) return;
+    const client = window.supabaseClient || supabaseClient;
+
+    if(client && entry.id){
+      try{
+        const { data: { session } } = await client.auth.getSession();
+        if(session && session.user){
+          const { error: delErr } = await client.from('FOFO Catch History').delete().eq('id', entry.id);
+          if(delErr){
+            console.error('Failed to remove discarded catch from history:', delErr.message);
+            setStatus('Could not discard — try again.', 'bad');
+            return;
+          }
+        }
+      }catch(err){
+        console.error('Error discarding catch:', err);
+        setStatus('Could not discard — try again.', 'bad');
+        return;
       }
-    }catch(err){ console.error('Error syncing sale:', err); }
+    }
+
+    iceboxLog.splice(idx, 1);
+    renderIcebox();
   }
   function renderMarketBulletin(){
     const el = document.getElementById('marketBulletinList');
@@ -1834,12 +1887,13 @@ window.loadUserCatches = async function loadUserCatches() {
       sellBtn.className = 'sell-btn';
       const species = speciesFor(entry);
       const estValue = calcSalePrice(entry);
+      let cantSell = false;
       if(species && species.priceHigh<=0){
         sellBtn.textContent = 'No Market';
-        sellBtn.disabled = true;
+        sellBtn.disabled = true; cantSell = true;
       } else if(estValue<=0){
         sellBtn.textContent = 'Spoiled';
-        sellBtn.disabled = true;
+        sellBtn.disabled = true; cantSell = true;
       } else {
         sellBtn.textContent = 'Sell $'+estValue.toFixed(2);
       }
@@ -1852,6 +1906,16 @@ window.loadUserCatches = async function loadUserCatches() {
       item.appendChild(thumb); 
       item.appendChild(info);
       item.appendChild(sellBtn);
+      if(cantSell){
+        const discardBtn = document.createElement('button');
+        discardBtn.className = 'discard-btn';
+        discardBtn.textContent = 'Discard';
+        discardBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          discardFish(entry);
+        });
+        item.appendChild(discardBtn);
+      }
 
       item.addEventListener('click', (e)=>{
         e.stopPropagation();
