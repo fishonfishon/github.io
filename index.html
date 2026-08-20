@@ -568,7 +568,7 @@
         if(!AC) return false;
         ctx = new AC();
         sfxGain = ctx.createGain(); sfxGain.gain.value = 0.22; sfxGain.connect(ctx.destination);
-        bgGain = ctx.createGain(); bgGain.gain.value = 0.065; bgGain.connect(ctx.destination); // background stays much quieter than effects
+        bgGain = ctx.createGain(); bgGain.gain.value = 0.165; bgGain.connect(ctx.destination); // Background is 25% quieter than effects (75% of 0.22)
       }
       if(ctx.state==='suspended') ctx.resume();
       return true;
