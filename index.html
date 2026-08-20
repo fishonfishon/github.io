@@ -443,7 +443,7 @@
     <div id="reelWheel"><img id="wheelLogo" src="images/logo.png" alt="logo"><div class="dial-rotor" id="dialRotor"></div></div>
   </div>
 
-  <div class="icebox-wrap" id="iceboxWrap">
+<div class="icebox-wrap" id="iceboxWrap">
     <div class="icebox-scene">
       <div class="icebox-lid" id="iceboxLid">
         <div class="handle"></div>
@@ -452,6 +452,9 @@
         <div class="icebox-latch right"></div>
       </div>
       <div class="icebox-body">
+        <!-- ADD THE BUTTON RIGHT HERE -->
+        <button id="loadCatchesBtn" onclick="loadUserCatches()" style="margin: 0 auto 10px auto; display: block; padding: 6px 12px; background: #203542; color: #fff; border: 1px solid #4a6fa5; border-radius: 4px; cursor: pointer; font-size: 13px;">🔄 Load Past Catches</button>
+        
         <div class="icebox-list" id="iceboxRow"></div>
         <div id="iceboxEmpty">Nothing caught yet this session.</div>
       </div>
@@ -1555,21 +1558,21 @@
 
 // Put loadUserCatches globally at the root script level
 async function loadUserCatches() {
-  console.log("loadUserCatches called...");
+  console.log("Manual load requested: fetching user catches...");
   
   const client = window.supabaseClient || supabaseClient;
   if (typeof client === 'undefined' || !client) {
     console.log("Supabase client not found.");
+    alert("Supabase client not initialized.");
     return;
   }
 
   const { data: { session } } = await client.auth.getSession();
   if (!session || !session.user) {
-    console.log("No active session found during load.");
+    console.log("No active session found.");
+    alert("Please sign in to load past catches!");
     return;
   }
-
-  console.log("Fetching catches for user ID:", session.user.id);
 
   const { data, error } = await client
     .from('FOFO Catch History')
@@ -1579,14 +1582,13 @@ async function loadUserCatches() {
 
   if (error) {
     console.error('Failed to load historical catches:', error.message);
+    alert('Failed to load catches: ' + error.message);
     return;
   }
 
-  console.log("Data retrieved from Supabase:", data);
-
   if (typeof iceboxLog !== 'undefined') {
     iceboxLog.length = 0;
-    if (data) {
+    if (data && data.length > 0) {
       data.forEach(row => {
         iceboxLog.push({
           species: { name: row.fish_type },
@@ -1594,11 +1596,14 @@ async function loadUserCatches() {
           tier: 'Standard'
         });
       });
+      console.log(`Successfully loaded ${data.length} catches into icebox.`);
+    } else {
+      console.log("No historical catches found in database for this user.");
     }
+    
     if (typeof renderIcebox === 'function') {
       renderIcebox();
     }
-    console.log("Icebox rendered with items:", iceboxLog.length);
   }
 }
 
