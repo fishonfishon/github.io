@@ -1557,8 +1557,8 @@
   }
 
 // Put loadUserCatches globally at the root script level
-async function loadUserCatches() {
-  console.log("Manual load requested: fetching user catches...");
+window.loadUserCatches = async function loadUserCatches() {
+  console.log("loadUserCatches called...");
   
   const client = window.supabaseClient || supabaseClient;
   if (typeof client === 'undefined' || !client) {
