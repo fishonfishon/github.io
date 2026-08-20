@@ -2250,6 +2250,51 @@
   function showAuthModal(){ if(authModal) authModal.classList.add('show'); }
   function hideAuthModal(){ if(authModal) { authModal.classList.remove('show'); authError.textContent=''; authEmail.value=''; authPassword.value=''; } }
 
+  // --- UNIQUE USERNAME HANDLING ---
+  async function setUsername(desiredUsername) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session || !session.user) return { success: false, error: "Not logged in" };
+
+    const { error } = await supabaseClient
+      .from('profiles')
+      .upsert([{ id: session.user.id, username: desiredUsername }], { onConflict: 'id' });
+
+    if (error) {
+      if (error.code === '23505') {
+        return { success: false, error: "That account name is already taken! Try another." };
+      }
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+
+  async function checkAndPromptUsername() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session || !session.user) return;
+
+    const { data } = await supabaseClient
+      .from('profiles')
+      .select('username')
+      .eq('id', session.user.id)
+      .single();
+
+    if (!data || !data.username) {
+      let chosenName = prompt("Welcome to FOFO! Please choose a unique account name:");
+      while (!chosenName || chosenName.trim() === "") {
+        chosenName = prompt("Account name cannot be empty. Please choose a unique account name:");
+      }
+
+      const result = await setUsername(chosenName.trim());
+      if (!result.success) {
+        alert(result.error);
+        checkAndPromptUsername(); // Loop back if taken/failed
+      } else {
+        alert("Account name set successfully!");
+      }
+    }
+  }
+  // --------------------------------
+
   function updateAccountUI(session){
     if(!accountBtn) return;
     if(session && session.user){
@@ -2385,18 +2430,22 @@
   }
 
   if(supabaseClient){
-    supabaseClient.auth.onAuthStateChange((event, session)=>{
+    supabaseClient.auth.onAuthStateChange(async (event, session)=>{
       updateAccountUI(session);
       if(session && event === 'SIGNED_IN') {
         hideAuthModal();
+        await checkAndPromptUsername();
         if(typeof loadUserCatches === 'function') loadUserCatches();
       }
     });
 
-    supabaseClient.auth.getSession().then(({data})=>{
+    supabaseClient.auth.getSession().then(async ({data})=>{
       updateAccountUI(data.session);
-      if(data.session && typeof loadUserCatches === 'function') {
-        loadUserCatches();
+      if(data.session) {
+        await checkAndPromptUsername();
+        if(typeof loadUserCatches === 'function') {
+          loadUserCatches();
+        }
       }
     });
   } else {
