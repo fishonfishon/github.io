@@ -2131,7 +2131,6 @@
 
 // ======================= AUTH (Supabase) =======================
 (function(){
-  // Replace these with your actual values from Supabase: Settings → API.
   const SUPABASE_URL = 'https://kgwfzmqswzfdknwneffd.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtnd2Z6bXFzd3pmZGtud25lZmZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNzY2NDYsImV4cCI6MjEwMjc1MjY0Nn0.8nTEgK11VEmlhOmAzdpV9UXhexGBF4W0aZW-nxxhYn8';
 
@@ -2181,7 +2180,7 @@
 
   accountBtn.addEventListener('click', async ()=>{
     if(!supabaseClient){
-      alert('Supabase isn\'t configured yet. Add your Project URL and anon key at the top of the auth script.');
+      alert('Supabase isn\'t configured yet.');
       return;
     }
     if(accountBtn.dataset.loggedIn==='true'){
@@ -2228,7 +2227,11 @@
   function wireOAuthButton(id, provider){
     document.getElementById(id).addEventListener('click', async ()=>{
       if(!supabaseClient) return;
-      const { error } = await supabaseClient.auth.signInWithOAuth({ provider, options:{ redirectTo: window.location.href } });
+      // Explicitly set clean origin redirect so it lands back on the game page cleanly
+      const { error } = await supabaseClient.auth.signInWithOAuth({ 
+        provider, 
+        options:{ redirectTo: window.location.origin + window.location.pathname } 
+      });
       if(error){ authError.style.color='var(--bad)'; authError.textContent = error.message; }
     });
   }
@@ -2237,9 +2240,13 @@
   if(supabaseClient){
     supabaseClient.auth.onAuthStateChange((event, session)=>{
       updateAccountUI(session);
-      if(session) hideAuthModal();
+      if(session && event === 'SIGNED_IN') hideAuthModal();
     });
-    supabaseClient.auth.getSession().then(({data})=>updateAccountUI(data.session));
+
+    // Check existing session or process incoming OAuth token code block
+    supabaseClient.auth.getSession().then(({data})=>{
+      updateAccountUI(data.session);
+    });
   } else {
     updateAccountUI(null);
   }
