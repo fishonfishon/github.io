@@ -2218,6 +2218,8 @@
         detectSessionInUrl: true
       }
     });
+    // Expose globally so other functions can access it easily
+    window.supabaseClient = supabaseClient;
   }
 
   const accountBtn = document.getElementById('accountBtn');
@@ -2241,10 +2243,11 @@
     authToggleLink.textContent = mode==='signin' ? 'Sign Up' : 'Sign In';
     authError.textContent='';
   }
-  function showAuthModal(){ authModal.classList.add('show'); }
-  function hideAuthModal(){ authModal.classList.remove('show'); authError.textContent=''; authEmail.value=''; authPassword.value=''; }
+  function showAuthModal(){ if(authModal) authModal.classList.add('show'); }
+  function hideAuthModal(){ if(authModal) { authModal.classList.remove('show'); authError.textContent=''; authEmail.value=''; authPassword.value=''; } }
 
   function updateAccountUI(session){
+    if(!accountBtn) return;
     if(session && session.user){
       const label = session.user.email || session.user.user_metadata?.name || 'Account';
       accountBtn.textContent = '👤 ' + label.split('@')[0];
@@ -2257,90 +2260,95 @@
   }
 
   // Handle main button click: Toggle dropdown if logged in, show modal if logged out
-  accountBtn.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    if(!supabaseClient){
-      alert('Supabase isn\'t configured yet.');
-      return;
-    }
-    if(accountBtn.dataset.loggedIn==='true'){
-      if(accountDropdown){
-        accountDropdown.style.display = accountDropdown.style.display === 'block' ? 'none' : 'block';
+  if(accountBtn){
+    accountBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(!supabaseClient){
+        alert('Supabase isn\'t configured yet.');
+        return;
       }
-    } else {
-      setAuthMode('signin');
-      showAuthModal();
-    }
-  });
+      if(accountBtn.dataset.loggedIn==='true'){
+        if(accountDropdown){
+          accountDropdown.style.display = accountDropdown.style.display === 'block' ? 'none' : 'block';
+        }
+      } else {
+        setAuthMode('signin');
+        showAuthModal();
+      }
+    });
+  }
 
   // Handle explicit Sign Out click from dropdown
   if(signOutBtn){
     signOutBtn.addEventListener('click', async ()=>{
       if(accountDropdown) accountDropdown.style.display = 'none';
       await supabaseClient.auth.signOut();
+      // Clear icebox on manual sign out
+      if(typeof iceboxLog !== 'undefined'){
+        iceboxLog.length = 0;
+        if(typeof renderIcebox === 'function') renderIcebox();
+      }
     });
   }
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking anywhere else on the page
   window.addEventListener('click', ()=>{
     if(accountDropdown) accountDropdown.style.display = 'none';
   });
 
-  document.getElementById('authCloseBtn').addEventListener('click', hideAuthModal);
-  authModal.addEventListener('click', e=>{ if(e.target===authModal) hideAuthModal(); });
+  const closeBtn = document.getElementById('authCloseBtn');
+  if(closeBtn) closeBtn.addEventListener('click', hideAuthModal);
+  if(authModal) authModal.addEventListener('click', e=>{ if(e.target===authModal) hideAuthModal(); });
 
-  authToggleLink.addEventListener('click', e=>{
-    e.preventDefault();
-    setAuthMode(authMode==='signin' ? 'signup' : 'signin');
-  });
-
-  authSubmitBtn.addEventListener('click', async ()=>{
-    if(!supabaseClient) return;
-    const email = authEmail.value.trim();
-    const password = authPassword.value;
-    authError.style.color = 'var(--bad)';
-    if(!email || !password){ authError.textContent='Enter an email and password.'; return; }
-    authSubmitBtn.disabled = true;
-    try{
-      if(authMode==='signin'){
-        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if(error) throw error;
-        hideAuthModal();
-      } else {
-        const { error } = await supabaseClient.auth.signUp({ email, password });
-        if(error) throw error;
-        hideAuthModal();
-      }
-    }catch(err){
-      authError.style.color = 'var(--bad)';
-      authError.textContent = err.message || 'Something went wrong.';
-    }
-    authSubmitBtn.disabled = false;
-  });
-
-  function wireOAuthButton(id, provider){
-    const btn = document.getElementById(id);
-    if(btn){
-      btn.addEventListener('click', async ()=>{
-        if(!supabaseClient) return;
-        const { error } = await supabaseClient.auth.signInWithOAuth({ 
-          provider, 
-          options:{ redirectTo: window.location.origin + window.location.pathname } 
-        });
-        if(error){ authError.style.color='var(--bad)'; authError.textContent = error.message; }
-      });
-    }
+  if(authToggleLink){
+    authToggleLink.addEventListener('click', e=>{
+      e.preventDefault();
+      setAuthMode(authMode==='signin' ? 'signup' : 'signin');
+    });
   }
-  wireOAuthButton('googleSignInBtn', 'google');
+
+  if(authSubmitBtn){
+    authSubmitBtn.addEventListener('click', async ()=>{
+      if(!supabaseClient) return;
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+      if(authError) authError.style.color = 'var(--bad)';
+      if(!email || !password){ if(authError) authError.textContent='Enter an email and password.'; return; }
+      authSubmitBtn.disabled = true;
+      try{
+        if(authMode==='signin'){
+          const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if(error) throw error;
+          hideAuthModal();
+        } else {
+          const { error } = await supabaseClient.auth.signUp({ email, password });
+          if(error) throw error;
+          hideAuthModal();
+        }
+      }catch(err){
+        if(authError){
+          authError.style.color = 'var(--bad)';
+          authError.textContent = err.message || 'Something went wrong.';
+        }
+      }
+      authSubmitBtn.disabled = false;
+    });
+  }
 
   if(supabaseClient){
     supabaseClient.auth.onAuthStateChange((event, session)=>{
       updateAccountUI(session);
-      if(session && event === 'SIGNED_IN') hideAuthModal();
+      if(session && event === 'SIGNED_IN') {
+        hideAuthModal();
+        if(typeof loadUserCatches === 'function') loadUserCatches();
+      }
     });
 
     supabaseClient.auth.getSession().then(({data})=>{
       updateAccountUI(data.session);
+      if(data.session && typeof loadUserCatches === 'function') {
+        loadUserCatches();
+      }
     });
   } else {
     updateAccountUI(null);
