@@ -568,7 +568,7 @@
         if(!AC) return false;
         ctx = new AC();
         sfxGain = ctx.createGain(); sfxGain.gain.value = 0.22; sfxGain.connect(ctx.destination);
-        bgGain = ctx.createGain(); bgGain.gain.value = 0.165; bgGain.connect(ctx.destination); // Background is 25% quieter than effects (75% of 0.22)
+        bgGain = ctx.createGain(); bgGain.gain.value = 0.065; bgGain.connect(ctx.destination); // background stays much quieter than effects
       }
       if(ctx.state==='suspended') ctx.resume();
       return true;
@@ -1579,10 +1579,12 @@ window.loadUserCatches = async function loadUserCatches() {
     iceboxLog.length = 0;
     if (data) {
       data.forEach(row => {
+        const species = FISH_DATA.find(s => s.name === row.fish_type);
+        if (!species) return; // skip rows for species no longer in the current dataset
         iceboxLog.push({
-          species: { name: row.fish_type },
+          species: species,
           weight: row.weight_lb,
-          tier: 'Standard',
+          tier: sizeTierFor(species, row.weight_lb),
           createdAt: row.created_at // <-- Store the timestamp here
         });
       });
