@@ -112,6 +112,16 @@
 
   .rig-area{display:flex;align-items:center;justify-content:center;gap:18px;padding:14px;}
   #reelBailBtn{width:140px;height:76px;background:transparent;border:none;cursor:pointer;padding:0;}
+  .bail-stack{ position:relative; width:140px; height:76px; margin:0 auto; }
+  .bail-stack #reelBailBtn{ position:absolute; inset:0; }
+  #castBtn{
+    position:absolute; left:50%; top:36px; transform:translate(-50%,0);
+    width:58px; height:58px; border-radius:50%; z-index:2;
+    background:var(--accent); color:#1a1210; font-weight:800; font-size:11px; letter-spacing:0.02em;
+    border:2px solid #16262e; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,0.3);
+  }
+  #castBtn:active{ transform:translate(-50%,0) scale(0.95); }
+  #castBtn.hidden-cast-btn{ opacity:0.25; pointer-events:none; }
   #reelWheel{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #384b48, #1a2422 70%);border:3px solid #47605c;position:relative;touch-action:none;}
   .manual-jig-btn{
     width:32px;height:32px;border-radius:50%;border:2px solid #16262e;
@@ -419,16 +429,19 @@
     <div class="ro"><div class="v" id="roCurrent">→0.0</div><div class="l">Current ft/s</div></div>
   </div>
 
-  <div class="status" id="reelStatus">Bail closed. Hold the arc button while you wind up to prepare a cast.</div>
+  <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear and to cast hold down the cast button and flick your phone away from you like you would with a real fishing rod and then let go of the cast button!</div>
 
   <div class="rig-area" id="bailRigArea">
-    <button id="reelBailBtn" aria-label="Toggle bail">
-      <svg viewBox="0 0 140 70" width="140" height="70">
-        <path d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="#47605c" stroke-width="10" stroke-linecap="round"/>
-        <path id="reelBailFill" d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 300"/>
-        <text x="70" y="35" fill="#c7d0d0" font-size="11" text-anchor="middle" id="reelBailLabel">HOLD: CAST</text>
-      </svg>
-    </button>
+    <div class="bail-stack">
+      <button id="reelBailBtn" aria-label="Toggle bail">
+        <svg viewBox="0 0 140 70" width="140" height="70">
+          <path d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="#47605c" stroke-width="10" stroke-linecap="round"/>
+          <path id="reelBailFill" d="M 15 65 A 55 55 0 0 1 125 65" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 300"/>
+          <text x="70" y="35" fill="#c7d0d0" font-size="11" text-anchor="middle" id="reelBailLabel"></text>
+        </svg>
+      </button>
+      <button id="castBtn" aria-label="Hold to cast">CAST</button>
+    </div>
   </div>
   <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
     <div id="reelWheel"><img id="wheelLogo" src="images/logo.png" alt="logo"><div class="dial-rotor" id="dialRotor"></div></div>
@@ -1702,7 +1715,7 @@ window.loadUserCatches = async function loadUserCatches() {
   function resetCast(){
     depthFt=0; bottomDepthFt=depthProfileFt(distanceFt);
     bailOpen=false; freeFalling=false; bottomed=false; reelSpeedFtPerSec=0; lockedLineFt=null;
-    setStatus(castActive ? 'Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.' : 'Bail closed. Hold the arc button while you wind up to prepare a cast.', '');
+    setStatus(castActive ? 'Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.' : 'Bail closed. Hold the cast button and wind up to prepare a cast.', '');
     updateReadouts(); drawScene();
     updateBailVisual();
   }
@@ -1737,35 +1750,44 @@ window.loadUserCatches = async function loadUserCatches() {
 
   // ---- bail: simple tap button, half-circle visual kept ----
   const bailBtn=document.getElementById('reelBailBtn');
+  const castBtn=document.getElementById('castBtn');
   const bailFill=document.getElementById('reelBailFill');
   const bailLabel=document.getElementById('reelBailLabel');
   function updateBailVisual(){
     bailFill.setAttribute('stroke-dasharray', bailOpen? '180 300' : '0 300');
-    bailLabel.textContent = !castActive ? 'HOLD: CAST' : (bailOpen ? 'PRESS: CLOSE BAIL' : 'PRESS: OPEN BAIL');
+    bailLabel.textContent = !castActive ? '' : (bailOpen ? 'PRESS: CLOSE BAIL' : 'PRESS: OPEN BAIL');
+    // The cast button only works once the lure is fully back on shore — once a
+    // cast is active, all interaction moves to the arc/bail button instead.
+    castBtn.classList.toggle('hidden-cast-btn', castActive);
+    bailBtn.style.pointerEvents = castActive ? 'auto' : 'none';
   }
   let castHoldPointer=false;
+  castBtn.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    if(castActive) return;
+    try{ castBtn.setPointerCapture(e.pointerId); }catch(err){}
+    castHoldPointer=true; bailOpen=true;
+    window.fishOnCastControl.bailHeld=true;
+    window.fishOnEnableCastMotion();
+    window.fishOnArmCast();
+    setStatus('Bail held open. Wind up, then release to cast.', '');
+    // Failsafe: the iOS permission dialog triggered above can interrupt the touch
+    // sequence with a pointercancel instead of pointerup, which would otherwise
+    // leave the hold stuck forever and let a later jig misfire as a cast.
+    clearTimeout(window._fishOnHoldFailsafe);
+    window._fishOnHoldFailsafe = setTimeout(()=>{
+      if(window.fishOnCastControl.bailHeld){
+        window.fishOnCastControl.bailHeld=false;
+        castHoldPointer=false;
+        window.fishOnReleaseCast();
+        if(!castActive){ bailOpen=false; updateBailVisual(); updateReadouts(); }
+      }
+    }, 4000);
+  });
   bailBtn.addEventListener('pointerdown', e=>{
     e.preventDefault();
-    try{ bailBtn.setPointerCapture(e.pointerId); }catch(err){}
-    if(!castActive){
-      castHoldPointer=true; bailOpen=true;
-      window.fishOnCastControl.bailHeld=true;
-      window.fishOnEnableCastMotion();
-      window.fishOnArmCast();
-      setStatus('Bail held open. Wind up, then release to cast.', '');
-      // Failsafe: the iOS permission dialog triggered above can interrupt the touch
-      // sequence with a pointercancel instead of pointerup, which would otherwise
-      // leave the hold stuck forever and let a later jig misfire as a cast.
-      clearTimeout(window._fishOnHoldFailsafe);
-      window._fishOnHoldFailsafe = setTimeout(()=>{
-        if(window.fishOnCastControl.bailHeld){
-          window.fishOnCastControl.bailHeld=false;
-          castHoldPointer=false;
-          window.fishOnReleaseCast();
-          if(!castActive){ bailOpen=false; updateBailVisual(); updateReadouts(); }
-        }
-      }, 4000);
-    } else if(bailOpen){
+    if(!castActive) return; // pre-cast arming now lives entirely on castBtn
+    if(bailOpen){
       bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
       window.fishOnSound.bailClick();
       setStatus('Bail closed. As the lure sinks, the fixed line will pull it toward shore.', '');
@@ -1785,7 +1807,7 @@ window.loadUserCatches = async function loadUserCatches() {
     setTimeout(()=>{
       if(!castActive){
         bailOpen=false; updateBailVisual(); updateReadouts();
-        setStatus('Bail closed. Hold the arc button while you wind up to prepare a cast.', '');
+        setStatus('Bail closed. Hold the cast button and wind up to prepare a cast.', '');
       }
     }, 30);
   }
