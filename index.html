@@ -1516,9 +1516,9 @@
     hookedFish=null; fishRunning=false;
   }
 
-  // ---------------- Icebox: in-memory catch log, resets on page reload ----------------
+  // ---------------- Icebox: catch log with Supabase cloud persistence ----------------
   const iceboxLog = [];
-  
+
   async function addToIcebox(species, weight, tier){
     iceboxLog.unshift({ species, weight, tier });
     renderIcebox();
@@ -1553,6 +1553,38 @@
     } catch (err) {
       console.error('Error in cloud sync:', err);
     }
+  }
+
+  async function loadUserCatches() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
+
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session || !session.user) return;
+
+    const { data, error } = await supabaseClient
+      .from('FOFO Catch History')
+      .select('*')
+      .eq('player_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to load historical catches:', error.message);
+      return;
+    }
+
+    iceboxLog.length = 0; // Clear local array while keeping reference
+    
+    if (data) {
+      data.forEach(row => {
+        iceboxLog.push({
+          species: { name: row.fish_type },
+          weight: row.weight_lb,
+          tier: 'Standard' // Fallback tier for historical rows
+        });
+      });
+    }
+
+    renderIcebox();
   }
 
   function renderIcebox(){
