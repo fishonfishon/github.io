@@ -100,6 +100,9 @@
 
   .debug{margin:0 16px 10px;font-size:10px;color:#6f8080;font-family:'SF Mono',Menlo,monospace;display:flex;flex-wrap:wrap;gap:4px 14px;}
   footer{margin-top:auto;padding:12px 16px 20px;font-size:11px;color:#7f8f8f;line-height:1.5;border-top:1px solid var(--line);}
+  #legalFooter{padding:10px 16px 18px;font-size:11px;color:#7f8f8f;text-align:center;border-top:1px solid var(--line);}
+  #legalFooter a{color:var(--accent);text-decoration:none;}
+  #legalFooter a:hover{text-decoration:underline;}
 
   #goReelBtn{display:none;}
 
@@ -115,9 +118,9 @@
   .bail-stack{ position:relative; width:140px; height:76px; margin:0 auto; }
   .bail-stack #reelBailBtn{ position:absolute; inset:0; }
   #castBtn{
-    position:absolute; left:50%; top:36px; transform:translate(-50%,0);
-    width:58px; height:58px; border-radius:50%; z-index:2;
-    background:var(--accent); color:#1a1210; font-weight:800; font-size:11px; letter-spacing:0.02em;
+    position:absolute; left:50%; top:44.5px; transform:translate(-50%,0);
+    width:41px; height:41px; border-radius:50%; z-index:2;
+    background:var(--accent); color:#1a1210; font-weight:800; font-size:9px; letter-spacing:0.02em;
     border:2px solid #16262e; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,0.3);
   }
   #castBtn:active{ transform:translate(-50%,0) scale(0.95); }
@@ -238,8 +241,9 @@
       "readouts  autobtn"
       "icebox    autopanel"
       "reeldbg   autopanel"
-      "resetrow  autopanel";
-    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto;
+      "resetrow  autopanel"
+      "legal     legal";
+    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto auto;
     column-gap:20px; row-gap:6px;
     max-width:960px; margin:0 auto; padding:12px 18px 20px;
     max-height:none;
@@ -259,6 +263,7 @@
   #castControlsRow{ grid-area:autobtn; margin:6px 0 0; }
   #simPanel{ grid-area:autopanel; margin:6px 0 0; }
   #screenCast.wrap > footer{ display:none; }
+  #legalFooter{ grid-area:legal; margin-top:6px; }
 }
 </style>
 </head>
@@ -393,7 +398,7 @@
   <button id="goReelBtn">Reel It In →</button>
 
   <div class="controls" id="castControlsRow">
-    <button id="simBtn" class="btn-ghost" style="flex:1;">Manual Cast and Jig</button>
+    <button id="simBtn" class="btn-ghost" style="flex:1;">Auto Cast and Jig</button>
   </div>
   <div class="sim-panel" id="simPanel">
     <label>Simulated swing force: <span id="simVal">60</span> m/s²</label>
@@ -407,6 +412,9 @@
   <footer>
     Hold the bail button below, wind up, whip forward, and release — however hard you were swinging at the moment you let go is what the cast uses. No timing window, no penalty for releasing late.
   </footer>
+  <div id="legalFooter">
+    © 2026 Fish On! Fish On! — Mobile Cast and Reel Engine · <a href="privacy.html">Privacy Policy</a> · <a href="tos.html">Terms of Service</a>
+  </div>
 </div>
 
 <!-- ======================= SCREEN 2: REELING ======================= -->
@@ -430,6 +438,7 @@
   </div>
 
   <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear and to cast hold down the cast button and flick your phone away from you like you would with a real fishing rod and then let go of the cast button!</div>
+  <button id="releaseFishBtn" class="btn-ghost" style="display:none;width:100%;margin-top:6px;">Release Fish</button>
 
   <div class="rig-area" id="bailRigArea">
     <div class="bail-stack">
@@ -1702,6 +1711,8 @@ window.loadUserCatches = async function loadUserCatches() {
 
   const statusEl=document.getElementById('reelStatus');
   const roDepth=document.getElementById('roDepth'), roDist=document.getElementById('roDist'), roBail=document.getElementById('roBail');
+  const releaseFishBtn=document.getElementById('releaseFishBtn');
+  releaseFishBtn.addEventListener('click', fullReset);
   const transferInfo=document.getElementById('rTransferInfo');
 
   function setStatus(t,cls){ statusEl.textContent='Coach: '+t; statusEl.className='status'+(cls?' '+cls:''); }
@@ -1710,6 +1721,7 @@ window.loadUserCatches = async function loadUserCatches() {
     roDepth.textContent=depthFt.toFixed(0)+' ft';
     roDist.textContent=distanceFt.toFixed(0)+' ft';
     roBail.textContent=bailOpen?'Open':'Closed';
+    releaseFishBtn.style.display = (hookedFish && hookedFish.revealed) ? 'block' : 'none';
   }
 
   function resetCast(){
