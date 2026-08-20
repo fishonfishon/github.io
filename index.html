@@ -2132,15 +2132,18 @@
 // ======================= AUTH (Supabase) =======================
 (function(){
   // Replace these with your actual values from Supabase: Settings → API.
-  // Email/password works the moment these are filled in — no other setup
-  // needed. Google/Facebook/Apple additionally require enabling and
-  // configuring each provider in Supabase's Authentication → Providers page.
   const SUPABASE_URL = 'https://kgwfzmqswzfdknwneffd.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtnd2Z6bXFzd3pmZGtud25lZmZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNzY2NDYsImV4cCI6MjEwMjc1MjY0Nn0.8nTEgK11VEmlhOmAzdpV9UXhexGBF4W0aZW-nxxhYn8';
 
   let supabaseClient = null;
   if(window.supabase && /^https:\/\//.test(SUPABASE_URL)){
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
   }
 
   const accountBtn = document.getElementById('accountBtn');
