@@ -1535,11 +1535,11 @@
         if (session && session.user) {
           const fishName = typeof species === 'object' && species !== null ? (species.name || 'Unknown Fish') : species;
           
-      const { error } = await supabaseClient.from('FOFO Catch History').insert([{
-    player_id: session.user.id,
-    fish_type: fish.name,
-    weight_lb: fish.weight
-  }]);
+          const { error } = await supabaseClient.from('FOFO Catch History').insert([{
+            player_id: session.user.id,
+            fish_type: fishName,
+            weight_lb: weight
+          }]);
 
           if (error) {
             console.error('Failed to save catch to cloud:', error.message);
