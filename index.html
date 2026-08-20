@@ -6,6 +6,9 @@
 <title>Fish On! Fish On! | Saltwater Shore Fishing Simulator</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="icon" type="image/png" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --sky-top:#7d97a3; --sky-bottom:#c7d3d3;
@@ -63,8 +66,64 @@
   .icebox-list-item:active{background:rgba(0,0,0,0.06);}
   .icebox-list-item .thumb{width:42px;height:42px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
   .icebox-list-item .info .name{font-weight:700;font-size:12.5px;}
+  .freshness-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+  .freshness-dot.green{background:#3ecf6e;}
+  .freshness-dot.yellow{background:#e0b23c;}
+  .freshness-dot.red{background:#d0453c;}
+  .freshness-dot.black{background:#1a1a1a;border:1px solid #5c6a6a;}
   .icebox-list-item .info .wt{font-size:11px;color:#3f5153;margin-top:1px;}
   #iceboxEmpty{padding:16px 12px;font-size:11.5px;color:#4a5c5e;text-align:center;}
+  #walletRow{
+    text-align:center; font-weight:800; font-size:14px; color:#1c2b2e;
+    padding:6px 0 10px; border-bottom:1px solid rgba(0,0,0,0.12); margin-bottom:6px;
+  }
+  .icebox-list-item{ flex-wrap:wrap; }
+  .sell-btn{
+    flex:0 0 auto; margin-left:auto; padding:6px 10px; border-radius:7px;
+    border:1px solid #16262e; background:var(--ok); color:#0d1f18;
+    font-size:11px; font-weight:800; cursor:pointer;
+  }
+  .sell-btn:active{ opacity:0.8; }
+  .sell-btn[disabled]{ background:#8a9a9a; color:#3a4444; cursor:default; }
+  #marketBulletin{
+    position:relative; margin:16px 16px 0; padding:14px;
+    background:
+      repeating-linear-gradient(90deg, #7a5230 0px, #6e4a2a 3px, #7a5230 6px),
+      linear-gradient(180deg, #8a5f38, #5e3d22);
+    border-radius:8px;
+    border:5px solid #4a2f1a;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.45), inset 0 0 0 2px rgba(0,0,0,0.25);
+  }
+  .wood-nail{
+    position:absolute; top:10px; width:10px; height:10px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #d8d8d8, #8a8a8a 60%, #4a4a4a);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  .wood-nail.left{ left:10px; } .wood-nail.right{ right:10px; }
+  .chalkboard{
+    background: radial-gradient(ellipse at 50% 20%, #33453a 0%, #1e2b23 70%, #16211a 100%);
+    border:3px solid #2a1c10; border-radius:5px;
+    padding:14px 12px 10px;
+    box-shadow: inset 0 0 24px rgba(0,0,0,0.55);
+  }
+  .chalk-title{
+    font-family:'Kalam',cursive; font-weight:700; font-size:19px; text-align:center;
+    color:#f4f1e6; text-shadow:0 0 4px rgba(244,241,230,0.35);
+    letter-spacing:0.02em; transform:rotate(-0.6deg);
+  }
+  .chalk-subtitle{
+    font-family:'Kalam',cursive; font-size:11.5px; text-align:center; color:#c9d4c9;
+    opacity:0.75; margin:-2px 0 10px; font-style:italic;
+  }
+  .bulletin-row{
+    display:flex; align-items:baseline; gap:6px;
+    padding:5px 2px; font-family:'Kalam',cursive; font-size:14.5px; color:#eee8d8;
+    border-bottom:1px dashed rgba(255,255,255,0.15);
+  }
+  .bulletin-row:last-child{ border-bottom:none; }
+  .bulletin-row .rank{ color:#e8c15a; font-weight:700; }
+  .bulletin-row .fish-name{ flex:1; }
+  .bulletin-row .price{ color:#8fd3a8; font-weight:700; }
   .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
   .seg button{flex:1;background:transparent;border:none;color:#c7d0d0;font-size:11.5px;padding:8px 2px;cursor:pointer;border-right:1px solid var(--line);}
   .seg button:last-child{border-right:none;}
@@ -240,10 +299,11 @@
       "canvas    wheel"
       "readouts  autobtn"
       "icebox    autopanel"
+      "bulletin  autopanel"
       "reeldbg   autopanel"
       "resetrow  autopanel"
       "legal     legal";
-    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto auto;
+    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto auto auto;
     column-gap:20px; row-gap:6px;
     max-width:960px; margin:0 auto; padding:12px 18px 20px;
     max-height:none;
@@ -258,6 +318,7 @@
   #bailRigArea{ grid-area:bail; padding:6px 0 0; }
   #wheelRigArea{ grid-area:wheel; padding:0; }
   #iceboxWrap{ grid-area:icebox; margin:8px 0 0; }
+  #marketBulletin{ grid-area:bulletin; margin-top:8px; }
   #reelDebugRow{ grid-area:reeldbg; margin:6px 0 0; }
   #reelControlsRow{ grid-area:resetrow; }
   #castControlsRow{ grid-area:autobtn; margin:6px 0 0; }
@@ -467,10 +528,20 @@
       <div class="icebox-body">
         <!-- ADD THE BUTTON RIGHT HERE -->
         <button id="loadCatchesBtn" onclick="loadUserCatches()" style="margin: 0 auto 10px auto; display: block; padding: 6px 12px; background: #203542; color: #fff; border: 1px solid #4a6fa5; border-radius: 4px; cursor: pointer; font-size: 13px;">🔄 Load Past Catches</button>
-        
+        <div id="walletRow">💰 Wallet: <span id="walletBalance">$0.00</span></div>
         <div class="icebox-list" id="iceboxRow"></div>
         <div id="iceboxEmpty">Nothing caught yet this session.</div>
       </div>
+    </div>
+  </div>
+
+  <div id="marketBulletin">
+    <div class="wood-nail left"></div>
+    <div class="wood-nail right"></div>
+    <div class="chalkboard">
+      <div class="chalk-title">☆ Market Bulletin ☆</div>
+      <div class="chalk-subtitle">today's top catches</div>
+      <div id="marketBulletinList"></div>
     </div>
   </div>
 
@@ -1092,22 +1163,22 @@
   // it, and a deep specialist like halibut still won't show up in 20ft of water
   // just because 90% of 20ft is a small number).
   const FISH_DATA = [
-    { name:'Coho Salmon',            img:'coho.png',            category:'salmon',    pctLow:0.10, pctHigh:0.50, absMin:1,   absMax:300,  lureMin:1,    lureMax:3,   wMin:4,   wMax:35,  chMin:0.02,   chMax:0.0001 },
-    { name:'Pink Salmon',            img:'pink.png',            category:'salmon',    pctLow:0.10, pctHigh:0.35, absMin:1,   absMax:250,  lureMin:1,    lureMax:3,   wMin:3,   wMax:15,  chMin:0.035,  chMax:0.00035 },
-    { name:'Chinook Salmon',         img:'chinook.png',         category:'salmon',    pctLow:0.70, pctHigh:0.90, absMin:100, absMax:400,  lureMin:2,    lureMax:5,   wMin:10,  wMax:125, chMin:0.0084, chMax:0.000024 },
-    { name:'Chum Salmon',            img:'chum.png',            category:'salmon',    pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:200,  lureMin:1.5,  lureMax:5,   wMin:10,  wMax:35,  chMin:0.02,   chMax:0.00015 },
-    { name:'Lingcod',                img:'lingcod.png',         category:'lingcod',   pctLow:0.80, pctHigh:1.00, absMin:15,  absMax:350,  lureMin:2,    lureMax:5,   wMin:5,   wMax:86,  chMin:0.015,  chMax:0.00005 },
-    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', photoScale:0.5, pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
-    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', photoScale:0.5, pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
-    { name:'Copper Rockfish',        img:'copper.png',          category:'rockfish',  pctLow:0.40, pctHigh:1.00, absMin:30,  absMax:400,  lureMin:1,    lureMax:2,   wMin:1,   wMax:10,  chMin:0.012,  chMax:0.00015 },
-    { name:'Quillback Rockfish',     img:'quillback.png',       category:'rockfish',  pctLow:0.60, pctHigh:1.00, absMin:60,  absMax:500,  lureMin:1.5,  lureMax:2.5, wMin:1,   wMax:7.5, chMin:0.009,  chMax:0.00008 },
-    { name:'Black Rockfish',         img:'black.png',           category:'rockfish',  pctLow:0.50, pctHigh:1.00, absMin:20,  absMax:500,  lureMin:1,    lureMax:2,   wMin:1,   wMax:13,  chMin:0.016,  chMax:0.00012 },
-    { name:'Starry Flounder',        img:'flounder.png',        category:'flounder',  pctLow:0.85, pctHigh:1.00, absMin:1,   absMax:800,  lureMin:1.5,  lureMax:7,   wMin:1,   wMax:20,  chMin:0.04,   chMax:0.00016 },
-    { name:'Sole',                   img:'sole.png',            category:'sole',      pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:800,  lureMin:0.5,  lureMax:2,   wMin:0.5, wMax:8,   chMin:0.024,  chMax:0.00024 },
-    { name:'Sea-Run Cutthroat',      img:'cutthroat.png',       category:'trout',     pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:50,   lureMin:0.25, lureMax:1,   wMin:1,   wMax:7,   chMin:0.015,  chMax:0.0025 },
-    { name:'Halibut',                img:'halibut.png',         category:'halibut',   pctLow:0.90, pctHigh:1.00, absMin:250, absMax:1000, lureMin:3,    lureMax:7,   wMin:15,  wMax:482, chMin:0.0002, chMax:0.0000001 },
-    { name:'Squid',                  img:'squid.png',           category:'squid',     pctLow:0.60, pctHigh:0.85, absMin:15,  absMax:1000, lureMin:0.25, lureMax:2,   wMin:0.1, wMax:15,  chMin:0.02,   chMax:0.0002 },
-    { name:'Dogfish',                img:'dogfish.png',         category:'dogfish',   pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:1000, lureMin:1.5,  lureMax:7,   wMin:2,   wMax:20,  chMin:0.002,  chMax:0.000025 }
+    { name:'Coho Salmon',            img:'coho.png',            category:'salmon',    priceLow:3.50, priceHigh:7.00,  pctLow:0.10, pctHigh:0.50, absMin:1,   absMax:300,  lureMin:1,    lureMax:3,   wMin:4,   wMax:35,  chMin:0.02,   chMax:0.0001 },
+    { name:'Pink Salmon',            img:'pink.png',            category:'salmon',    priceLow:1.25, priceHigh:1.80,  pctLow:0.10, pctHigh:0.35, absMin:1,   absMax:250,  lureMin:1,    lureMax:3,   wMin:3,   wMax:15,  chMin:0.035,  chMax:0.00035 },
+    { name:'Chinook Salmon',         img:'chinook.png',         category:'salmon',    priceLow:6.50, priceHigh:12.50, pctLow:0.70, pctHigh:0.90, absMin:100, absMax:400,  lureMin:2,    lureMax:5,   wMin:10,  wMax:125, chMin:0.0084, chMax:0.000024 },
+    { name:'Chum Salmon',            img:'chum.png',            category:'salmon',    priceLow:1.00, priceHigh:1.50,  pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:200,  lureMin:1.5,  lureMax:5,   wMin:10,  wMax:35,  chMin:0.02,   chMax:0.00015 },
+    { name:'Lingcod',                img:'lingcod.png',         category:'lingcod',   priceLow:3.00, priceHigh:7.00,  pctLow:0.80, pctHigh:1.00, absMin:15,  absMax:350,  lureMin:2,    lureMax:5,   wMin:5,   wMax:86,  chMin:0.015,  chMax:0.00005 },
+    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', priceLow:0.50, priceHigh:0.75,  photoScale:0.5, pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
+    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', priceLow:0.75, priceHigh:1.50,  photoScale:0.5, pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
+    { name:'Copper Rockfish',        img:'copper.png',          category:'rockfish',  priceLow:2.00, priceHigh:4.00,  pctLow:0.40, pctHigh:1.00, absMin:30,  absMax:400,  lureMin:1,    lureMax:2,   wMin:1,   wMax:10,  chMin:0.012,  chMax:0.00015 },
+    { name:'Quillback Rockfish',     img:'quillback.png',       category:'rockfish',  priceLow:2.00, priceHigh:4.50,  pctLow:0.60, pctHigh:1.00, absMin:60,  absMax:500,  lureMin:1.5,  lureMax:2.5, wMin:1,   wMax:7.5, chMin:0.009,  chMax:0.00008 },
+    { name:'Black Rockfish',         img:'black.png',           category:'rockfish',  priceLow:1.80, priceHigh:3.50,  pctLow:0.50, pctHigh:1.00, absMin:20,  absMax:500,  lureMin:1,    lureMax:2,   wMin:1,   wMax:13,  chMin:0.016,  chMax:0.00012 },
+    { name:'Starry Flounder',        img:'flounder.png',        category:'flounder',  priceLow:1.20, priceHigh:2.50,  pctLow:0.85, pctHigh:1.00, absMin:1,   absMax:800,  lureMin:1.5,  lureMax:7,   wMin:1,   wMax:20,  chMin:0.04,   chMax:0.00016 },
+    { name:'Sole',                   img:'sole.png',            category:'sole',      priceLow:1.50, priceHigh:3.20,  pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:800,  lureMin:0.5,  lureMax:2,   wMin:0.5, wMax:8,   chMin:0.024,  chMax:0.00024 },
+    { name:'Sea-Run Cutthroat',      img:'cutthroat.png',       category:'trout',     priceLow:0.50, priceHigh:1.25,  pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:50,   lureMin:0.25, lureMax:1,   wMin:1,   wMax:7,   chMin:0.015,  chMax:0.0025 },
+    { name:'Halibut',                img:'halibut.png',         category:'halibut',   priceLow:7.50, priceHigh:13.50, pctLow:0.90, pctHigh:1.00, absMin:250, absMax:1000, lureMin:3,    lureMax:7,   wMin:15,  wMax:482, chMin:0.0002, chMax:0.0000001 },
+    { name:'Squid',                  img:'squid.png',           category:'squid',     priceLow:2.00, priceHigh:4.50,  pctLow:0.60, pctHigh:0.85, absMin:15,  absMax:1000, lureMin:0.25, lureMax:2,   wMin:0.1, wMax:15,  chMin:0.02,   chMax:0.0002 },
+    { name:'Dogfish',                img:'dogfish.png',         category:'dogfish',   priceLow:0,    priceHigh:0,     pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:1000, lureMin:1.5,  lureMax:7,   wMin:2,   wMax:20,  chMin:0.002,  chMax:0.000025 }
   ];
   function lerp(a,b,f){ return a+(b-a)*f; }
   // The band a species actually occupies AT A GIVEN LOCATION, given that spot's
@@ -1535,7 +1606,8 @@
   const iceboxLog = [];
 
   async function addToIcebox(species, weight, tier){
-    iceboxLog.unshift({ species, weight, tier });
+    const localEntry = { species, weight, tier, createdAt: new Date().toISOString(), id: null };
+    iceboxLog.unshift(localEntry);
     renderIcebox();
 
     // Sync catch to Supabase if a user is logged in
@@ -1546,16 +1618,17 @@
         if (session && session.user) {
           const fishName = typeof species === 'object' && species !== null ? (species.name || 'Unknown Fish') : species;
           
-          const { error } = await supabaseClient.from('FOFO Catch History').insert([{
+          const { data, error } = await supabaseClient.from('FOFO Catch History').insert([{
             player_id: session.user.id,
             fish_type: fishName,
             weight_lb: weight
-          }]);
+          }]).select().single();
 
           if (error) {
             console.error('Failed to save catch to cloud:', error.message);
           } else {
             console.log('Catch successfully synced to Supabase!');
+            if(data){ localEntry.id = data.id; if(data.created_at) localEntry.createdAt = data.created_at; }
           }
         }
       }
@@ -1593,7 +1666,8 @@ window.loadUserCatches = async function loadUserCatches() {
           species: species,
           weight: row.weight_lb,
           tier: sizeTierFor(species, row.weight_lb),
-          createdAt: row.created_at // <-- Store the timestamp here
+          createdAt: row.created_at, // <-- Store the timestamp here
+          id: row.id
         });
       });
     }
@@ -1602,6 +1676,110 @@ window.loadUserCatches = async function loadUserCatches() {
     }
   }
 }
+
+  // ---------------- Market economy ----------------
+  // Sale price = (60% cleaned weight) x (a fresh random roll within the
+  // species' low-high market price) x (freshness multiplier). The market
+  // price and the freshness are both evaluated live, at the moment of sale.
+  function freshnessMultiplier(hoursSinceCaught){
+    if(hoursSinceCaught <= 2) return 1.0;
+    const hoursOver = hoursSinceCaught - 2;
+    return Math.max(0, 0.5 - hoursOver*0.10); // 50% at hour 2, then -10%/hr, hits 0% at hour 7
+  }
+  function freshnessColor(hoursSinceCaught){
+    if(hoursSinceCaught < 2) return 'green';
+    if(hoursSinceCaught < 4) return 'yellow';
+    if(hoursSinceCaught < 7) return 'red';
+    return 'black';
+  }
+  function speciesFor(entry){
+    return (typeof entry.species==='object' && entry.species) ? entry.species : FISH_DATA.find(s=>s.name===entry.species);
+  }
+  function hoursSinceCatch(entry){
+    const caughtAt = entry.createdAt ? new Date(entry.createdAt).getTime() : Date.now();
+    return Math.max(0, (Date.now()-caughtAt)/(1000*60*60));
+  }
+  // A single shared market snapshot, re-rolled every 10 minutes — the
+  // bulletin and an actual sale both read from this same current price, so
+  // what the bulletin shows is genuinely what you'd get selling right now.
+  let currentMarketPrices = {};
+  function rollMarketSnapshot(){
+    FISH_DATA.forEach(s=>{
+      currentMarketPrices[s.name] = s.priceHigh<=0 ? 0 : s.priceLow + Math.random()*(s.priceHigh-s.priceLow);
+    });
+    renderMarketBulletin();
+    if(iceboxLog.length) renderIcebox(); // refresh displayed sell prices to match the new snapshot
+  }
+  function calcSalePrice(entry){
+    const species = speciesFor(entry);
+    if(!species) return 0;
+    const cleanedWeight = entry.weight * 0.6;
+    const pricePerLb = currentMarketPrices[species.name] || 0;
+    const freshness = freshnessMultiplier(hoursSinceCatch(entry));
+    return cleanedWeight * pricePerLb * freshness;
+  }
+
+  let walletBalance = 0;
+  function updateWalletUI(){
+    const el = document.getElementById('walletBalance');
+    if(el) el.textContent = '$'+walletBalance.toFixed(2);
+  }
+  window.loadWallet = async function loadWallet(){
+    const client = window.supabaseClient || supabaseClient;
+    if(!client) return;
+    const { data: { session } } = await client.auth.getSession();
+    if(!session || !session.user) return;
+    const { data, error } = await client.from('FOFO Wallet').select('*').eq('player_id', session.user.id).maybeSingle();
+    if(error){ console.error('Failed to load wallet:', error.message); return; }
+    if(data){
+      walletBalance = Number(data.balance) || 0;
+    } else {
+      const { error: insErr } = await client.from('FOFO Wallet').insert([{ player_id: session.user.id, balance: 0 }]);
+      if(insErr) console.error('Failed to create wallet row:', insErr.message);
+      walletBalance = 0;
+    }
+    updateWalletUI();
+  };
+  async function sellFish(entry){
+    const idx = iceboxLog.indexOf(entry);
+    if(idx===-1) return;
+    const price = calcSalePrice(entry);
+    walletBalance += price;
+    updateWalletUI();
+    iceboxLog.splice(idx, 1);
+    renderIcebox();
+    window.fishOnSound && window.fishOnSound.catchSuccess && window.fishOnSound.catchSuccess();
+
+    const client = window.supabaseClient || supabaseClient;
+    if(!client) return;
+    try{
+      const { data: { session } } = await client.auth.getSession();
+      if(session && session.user){
+        if(entry.id){
+          const { error: delErr } = await client.from('FOFO Catch History').delete().eq('id', entry.id);
+          if(delErr) console.error('Failed to remove sold catch from history:', delErr.message);
+        }
+        const { error: balErr } = await client.from('FOFO Wallet').upsert({ player_id: session.user.id, balance: walletBalance });
+        if(balErr) console.error('Failed to save wallet balance:', balErr.message);
+      }
+    }catch(err){ console.error('Error syncing sale:', err); }
+  }
+  function renderMarketBulletin(){
+    const el = document.getElementById('marketBulletinList');
+    if(!el) return;
+    const top5 = FISH_DATA
+      .filter(s=>s.priceHigh>0)
+      .map(s=>({ species:s, price: currentMarketPrices[s.name]||0 }))
+      .sort((a,b)=>b.price-a.price)
+      .slice(0,5);
+    el.innerHTML = '';
+    top5.forEach((r,i)=>{
+      const row = document.createElement('div');
+      row.className = 'bulletin-row';
+      row.innerHTML = `<span class="rank">#${i+1}</span><span class="fish-name">${r.species.name}</span><span class="price">$${r.price.toFixed(2)}/lb</span>`;
+      el.appendChild(row);
+    });
+  }
 
   function renderIcebox(){
     const row = document.getElementById('iceboxRow');
@@ -1627,7 +1805,10 @@ window.loadUserCatches = async function loadUserCatches() {
       
       const name = document.createElement('div');
       name.className='name'; 
-      name.textContent = (typeof entry.species === 'object' && entry.species !== null) ? entry.species.name : entry.species;
+      const dot = document.createElement('span');
+      dot.className = 'freshness-dot ' + freshnessColor(hoursSinceCatch(entry));
+      name.appendChild(dot);
+      name.appendChild(document.createTextNode((typeof entry.species === 'object' && entry.species !== null) ? entry.species.name : entry.species));
       
       const wt = document.createElement('div');
       wt.className='wt'; 
@@ -1649,8 +1830,28 @@ window.loadUserCatches = async function loadUserCatches() {
       info.appendChild(wt);
       if(timeString) info.appendChild(timeDiv); // Add time below weight
 
+      const sellBtn = document.createElement('button');
+      sellBtn.className = 'sell-btn';
+      const species = speciesFor(entry);
+      const estValue = calcSalePrice(entry);
+      if(species && species.priceHigh<=0){
+        sellBtn.textContent = 'No Market';
+        sellBtn.disabled = true;
+      } else if(estValue<=0){
+        sellBtn.textContent = 'Spoiled';
+        sellBtn.disabled = true;
+      } else {
+        sellBtn.textContent = 'Sell $'+estValue.toFixed(2);
+      }
+      sellBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        if(sellBtn.disabled) return;
+        sellFish(entry);
+      });
+
       item.appendChild(thumb); 
       item.appendChild(info);
+      item.appendChild(sellBtn);
 
       item.addEventListener('click', (e)=>{
         e.stopPropagation();
@@ -2204,6 +2405,10 @@ window.loadUserCatches = async function loadUserCatches() {
   }
   ['pointerdown','touchstart','click','keydown'].forEach(evt=>window.addEventListener(evt, unlockAudioOnFirstInteraction));
 
+  rollMarketSnapshot();
+  setInterval(rollMarketSnapshot, 10*60*1000); // market prices fluctuate every 10 minutes
+  setInterval(()=>{ if(iceboxLog.length) renderIcebox(); }, 60000); // keeps displayed freshness/prices honest between market rolls
+
   fitCanvas(); resetCast();
   requestAnimationFrame(tick);
 
@@ -2498,6 +2703,9 @@ if(supabaseClient){
         if(typeof loadUserCatches === 'function') {
           loadUserCatches();
         }
+        if(typeof window.loadWallet === 'function') {
+          window.loadWallet();
+        }
       }
       await updateAccountUI(session);
     });
@@ -2507,6 +2715,9 @@ if(supabaseClient){
         await checkAndPromptUsername();
         if(typeof loadUserCatches === 'function') {
           loadUserCatches(); // This ensures it fires right when the session is verified on page load
+        }
+        if(typeof window.loadWallet === 'function') {
+          window.loadWallet();
         }
       }
       await updateAccountUI(data.session);
