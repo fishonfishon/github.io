@@ -113,6 +113,38 @@
   #gearShopSign:active{ transform:scale(0.98); }
   #gearShopSign .chalkboard{ padding:12px 10px 8px; }
   #gearShopSign .chalk-title{ font-size:17px; }
+
+  #tutorialToggleBtn{
+    display:block; width:100%; margin:0 0 12px; padding:9px;
+    border-radius:9px; border:1px solid var(--line); background:rgba(255,255,255,0.06);
+    color:var(--paper); font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  #tutorialToggleBtn[aria-pressed="true"]{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
+
+  #tutorialBanner{
+    position:fixed; left:50%; top:52px; transform:translateX(-50%);
+    z-index:92; max-width:min(92vw,420px); width:92vw;
+    background:rgba(20,16,12,0.94); border:2px solid var(--accent); border-radius:12px;
+    padding:10px 14px; box-shadow:0 6px 18px rgba(0,0,0,0.5);
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+  }
+  #tutorialBanner.show{ display:flex; }
+  #tutorialStepText{ font-size:12.5px; line-height:1.4; color:var(--paper); }
+  #tutorialSkipBtn{
+    flex:0 0 auto; background:none; border:1px solid var(--line); border-radius:7px;
+    color:#c7d0d0; font-size:10.5px; padding:6px 8px; cursor:pointer; white-space:nowrap;
+  }
+
+  .tutorial-glow{
+    position:relative; z-index:60;
+    box-shadow: 0 0 0 3px var(--accent), 0 0 18px 6px rgba(208,112,60,0.85) !important;
+    animation: tutorialPulse 1.1s ease-in-out infinite alternate;
+    border-radius:10px;
+  }
+  @keyframes tutorialPulse{
+    from{ box-shadow: 0 0 0 3px var(--accent), 0 0 10px 3px rgba(208,112,60,0.6); }
+    to{ box-shadow: 0 0 0 3px var(--accent), 0 0 24px 9px rgba(208,112,60,0.95); }
+  }
   .wood-nail{
     position:absolute; top:10px; width:10px; height:10px; border-radius:50%;
     background: radial-gradient(circle at 35% 30%, #d8d8d8, #8a8a8a 60%, #4a4a4a);
@@ -374,6 +406,10 @@
 <body>
 
 <div id="hapticFlash"></div>
+<div id="tutorialBanner">
+  <div id="tutorialStepText"></div>
+  <button id="tutorialSkipBtn">Skip step ▶</button>
+</div>
 <div id="accountContainer" style="position: fixed; top: 8px; left: 8px; z-index: 90;">
   <button id="accountBtn" aria-label="Account">👤 Sign In</button>
   <div id="accountDropdown" style="display: none; position: absolute; left: 0; top: 100%; margin-top: 5px; background: #1a1a1a; border: 1px solid #333; padding: 8px; border-radius: 6px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
@@ -411,6 +447,8 @@
     <h1>Saltwater Shore Fishing Simulator — Prototype</h1>
     <p>Choose your set-up based on the type of saltwater fish you want like in real life. Then cast your lure by whipping your phone while holding the cast button. Casting distance is entirely dependant on how well your setup matches your whip. Once you have casted, you can either let your lure slowly sink to the bottom where you can start jigging by jigging your phone like a rod, or you can slowly reel in to simulate trolling, or you may do both! There is also a current that will affect the trajectory of your lure. Your caught fishes will be in your icebox on the bottom. Good luck!</p>
   </header>
+
+  <button id="tutorialToggleBtn" aria-pressed="false">🎓 Tutorial: <span id="tutorialToggleState">Off</span></button>
 
   <div class="panel" id="gearPanel">
     <a href="shop.html" id="gearShopSign">
@@ -816,7 +854,7 @@
     let lastReelClickAt=0, nextReelClickGapMs=200;
     return {
       setSfxMuted(m){ sfxMuted=m; },
-      setBgMuted(m){ bgMuted=m; if(ensureCtx()) bgGain.gain.value = bgMuted?0:0.065; },
+      setBgMuted(m){ bgMuted=m; if(ensureCtx()) bgGain.gain.value = bgMuted?0:0.15; },
       isSfxMuted(){ return sfxMuted; },
       isBgMuted(){ return bgMuted; },
       unlock(){ ensureCtx(); startBackground(); }, // call from any user gesture
@@ -894,7 +932,6 @@
       b.classList.add('active'); setter(b.dataset.val);
     });
   }
-  wireSeg('sensSeg', v=>{ reelSensitivity=v; window.fishOnCastControl.reelSensitivity=v; });
 
   // ---- Inventory-driven gear (rod/reel/line/lure come from the shop now) ----
   const ROD_KEY_INFO = {
@@ -910,6 +947,22 @@
   function lineLabel(g){ const color=g.item_key.replace('line',''); const type=g.gear_type==='braid_line'?'Braid':'Mono'; return color+' '+type+' '+g.spec_value+'lb'; }
   function lureLabel(g){ return g.item_key+' '+g.spec_value+'oz'+(g.quantity>1?' (x'+g.quantity+')':''); }
 
+  let equippedIds = { rod:null, reel:null, line:null, lure:null }; // actual FOFO Player Gear row ids, persisted
+  async function saveEquippedGear(){
+    const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+    if(!client) return;
+    const { data:{session} } = await client.auth.getSession();
+    if(!session || !session.user) return;
+    try{
+      await client.from('FOFO Equipped Gear').upsert({
+        player_id: session.user.id,
+        rod_gear_id: equippedIds.rod, reel_gear_id: equippedIds.reel,
+        line_gear_id: equippedIds.line, lure_gear_id: equippedIds.lure,
+        reel_sensitivity: reelSensitivity, updated_at: new Date().toISOString()
+      });
+    }catch(err){ console.error('Failed to save equipped gear:', err); }
+  }
+
   function applyRodSelection(i){
     const g=ownedRods[i]; if(!g) return;
     const info = ROD_KEY_INFO[g.item_key]||{power:'medium',action:'fast'};
@@ -917,11 +970,13 @@
     window.fishOnCastControl.rodLength=rodLength;
     window.fishOnCastControl.power=power;
     window.fishOnCastControl.action=action;
+    equippedIds.rod = g.id; saveEquippedGear();
   }
   function applyReelSelection(i){
     const g=ownedReels[i];
     reelSpeedBonus = g ? (REEL_KEY_INFO[g.item_key]||0) : 0;
     window.fishOnCastControl.reelSpeedBonus = reelSpeedBonus;
+    equippedIds.reel = g ? g.id : null; saveEquippedGear();
   }
   function applyLineSelection(i){
     const g=ownedLines[i]; if(!g) return;
@@ -930,18 +985,30 @@
     window.fishOnCastControl.lineType=lineType;
     window.fishOnCastControl.lineStrength=lineStrength;
     window.fishOnCastControl.equippedLineRow = g;
+    equippedIds.line = g.id; saveEquippedGear();
   }
   function applyLureSelection(i){
     const g=ownedLures[i]; if(!g) return;
     lureOz = g.spec_value;
     window.fishOnCastControl.equippedLureRow = g;
+    equippedIds.lure = g.id; saveEquippedGear();
   }
-  document.getElementById('rodSelect').addEventListener('change', e=>applyRodSelection(parseInt(e.target.value)));
-  document.getElementById('reelSelect').addEventListener('change', e=>applyReelSelection(parseInt(e.target.value)));
-  document.getElementById('lineSelect').addEventListener('change', e=>applyLineSelection(parseInt(e.target.value)));
-  document.getElementById('lureSelect').addEventListener('change', e=>applyLureSelection(parseInt(e.target.value)));
+  document.getElementById('rodSelect').addEventListener('change', e=>{ applyRodSelection(parseInt(e.target.value)); window.fishOnTutorialEvent && window.fishOnTutorialEvent('gear_selected'); });
+  document.getElementById('reelSelect').addEventListener('change', e=>{ applyReelSelection(parseInt(e.target.value)); window.fishOnTutorialEvent && window.fishOnTutorialEvent('gear_selected'); });
+  document.getElementById('lineSelect').addEventListener('change', e=>{ applyLineSelection(parseInt(e.target.value)); window.fishOnTutorialEvent && window.fishOnTutorialEvent('gear_selected'); });
+  document.getElementById('lureSelect').addEventListener('change', e=>{ applyLureSelection(parseInt(e.target.value)); window.fishOnTutorialEvent && window.fishOnTutorialEvent('gear_selected'); });
+  wireSeg('sensSeg', v=>{ reelSensitivity=v; window.fishOnCastControl.reelSensitivity=v; saveEquippedGear(); window.fishOnTutorialEvent && window.fishOnTutorialEvent('sensitivity_changed'); });
 
-  function populateGearDropdowns(){
+  async function loadEquippedGear(userId){
+    const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+    if(!client) return null;
+    try{
+      const { data } = await client.from('FOFO Equipped Gear').select('*').eq('player_id', userId).maybeSingle();
+      return data;
+    }catch(err){ console.error('Failed to load equipped gear:', err); return null; }
+  }
+
+  function populateGearDropdowns(equipped){
     const rodSel=document.getElementById('rodSelect'), reelSel=document.getElementById('reelSelect');
     const lineSel=document.getElementById('lineSelect'), lureSel=document.getElementById('lureSelect');
 
@@ -955,10 +1022,24 @@
     if(!ownedLures.length) lureSel.innerHTML = '<option value="">— none owned —</option>';
     ownedLures.forEach((g,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=lureLabel(g); lureSel.appendChild(o); });
 
-    if(ownedRods.length){ rodSel.value=0; applyRodSelection(0); }
-    if(ownedReels.length){ reelSel.value=0; applyReelSelection(0); } else { applyReelSelection(-1); }
-    if(ownedLines.length){ lineSel.value=0; applyLineSelection(0); }
-    if(ownedLures.length){ lureSel.value=0; applyLureSelection(0); }
+    // Restore whatever was previously equipped (matched by actual gear row id)
+    // instead of always defaulting to the first item — this is what actually
+    // fixes gear resetting on tab focus / relogin.
+    const rodIdx = equipped ? ownedRods.findIndex(g=>g.id===equipped.rod_gear_id) : -1;
+    const reelIdx = equipped ? ownedReels.findIndex(g=>g.id===equipped.reel_gear_id) : -1;
+    const lineIdx = equipped ? ownedLines.findIndex(g=>g.id===equipped.line_gear_id) : -1;
+    const lureIdx = equipped ? ownedLures.findIndex(g=>g.id===equipped.lure_gear_id) : -1;
+
+    if(ownedRods.length){ const idx=rodIdx>=0?rodIdx:0; rodSel.value=idx; applyRodSelection(idx); }
+    if(ownedReels.length){ const idx=reelIdx>=0?reelIdx:0; reelSel.value=idx; applyReelSelection(idx); } else { applyReelSelection(-1); }
+    if(ownedLines.length){ const idx=lineIdx>=0?lineIdx:0; lineSel.value=idx; applyLineSelection(idx); }
+    if(ownedLures.length){ const idx=lureIdx>=0?lureIdx:0; lureSel.value=idx; applyLureSelection(idx); }
+
+    if(equipped && equipped.reel_sensitivity){
+      reelSensitivity = equipped.reel_sensitivity;
+      window.fishOnCastControl.reelSensitivity = reelSensitivity;
+      document.querySelectorAll('#sensSeg button').forEach(b=>b.classList.toggle('active', b.dataset.val===reelSensitivity));
+    }
   }
 
   let gearLoadPromise = null;
@@ -981,11 +1062,82 @@
       ownedLures = (data||[]).filter(g=>g.gear_type==='lure');
       const noGearMsg = document.getElementById('noGearMsg');
       if(noGearMsg) noGearMsg.style.display = (data && data.length) ? 'none' : 'block';
-      populateGearDropdowns();
+      const equipped = await loadEquippedGear(session.user.id);
+      populateGearDropdowns(equipped);
     })();
     gearLoadPromise.finally(()=>{ gearLoadPromise = null; });
     return gearLoadPromise;
   };
+
+  // ======================= TUTORIAL =======================
+  (function(){
+    const STEPS = [
+      { text:'🎣 Step 1 of 7: Pick your gear! Choose a rod, reel, line, and lure from the dropdowns below.', target:'#gearPanel', event:'gear_selected', timeoutMs:9000 },
+      { text:'🎣 Step 2 of 7: Hold the CAST button, whip your phone forward like a real cast, then let go!', target:'#castBtn', event:'cast_performed', timeoutMs:20000 },
+      { text:'🎣 Step 3 of 7: Turn the reel wheel to bring your line in.', target:'#reelWheel', event:'reeling_performed', timeoutMs:15000 },
+      { text:'🎣 Step 4 of 7: Try Reel Sensitivity — Slow reels in strong fish more safely, Fast brings an outmatched fish in quicker.', target:'#sensSeg', event:'sensitivity_changed', timeoutMs:9000 },
+      { text:'🎣 Step 5 of 7: Got a fish on? Keep reeling to land it!', target:'#reelWheel', event:'fish_landed', timeoutMs:60000 },
+      { text:'🎣 Step 6 of 7: Open your icebox and sell your catch for some cash!', target:'#iceboxWrap', event:'fish_sold', timeoutMs:20000 },
+      { text:'🎣 Step 7 of 7: Now try Auto Cast and Jig — no phone motion needed. Then we loop back to the start!', target:'#castControlsRow', event:'auto_cast_used', timeoutMs:20000 },
+    ];
+    let enabled = false, stepIndex = 0, currentGlowEl = null, stepTimer = null;
+    const banner = document.getElementById('tutorialBanner');
+    const stepTextEl = document.getElementById('tutorialStepText');
+    const toggleBtn = document.getElementById('tutorialToggleBtn');
+    const toggleState = document.getElementById('tutorialToggleState');
+
+    function clearGlow(){
+      if(currentGlowEl){ currentGlowEl.classList.remove('tutorial-glow'); currentGlowEl=null; }
+    }
+    function showStep(i){
+      clearTimeout(stepTimer);
+      stepIndex = i % STEPS.length;
+      const step = STEPS[stepIndex];
+      clearGlow();
+      stepTextEl.textContent = step.text;
+      const el = document.querySelector(step.target);
+      if(el){ el.classList.add('tutorial-glow'); currentGlowEl = el; }
+      if(step.timeoutMs){ stepTimer = setTimeout(()=>advance(step.event), step.timeoutMs); }
+    }
+    function advance(eventName){
+      if(!enabled) return;
+      const step = STEPS[stepIndex];
+      if(eventName && step.event !== eventName) return; // wrong event for this step, ignore
+      showStep(stepIndex+1);
+    }
+    window.fishOnTutorialEvent = function(eventName){ advance(eventName); };
+
+    function setEnabled(v){
+      enabled = v;
+      toggleBtn.setAttribute('aria-pressed', v?'true':'false');
+      toggleState.textContent = v?'On':'Off';
+      if(v){ banner.classList.add('show'); showStep(0); }
+      else { banner.classList.remove('show'); clearTimeout(stepTimer); clearGlow(); }
+    }
+    async function saveTutorialPref(v){
+      const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+      if(!client) return;
+      const { data:{session} } = await client.auth.getSession();
+      if(!session || !session.user) return;
+      try{ await client.from('profiles').update({ tutorial_enabled:v }).eq('id', session.user.id); }
+      catch(err){ console.error('Failed to save tutorial preference:', err); }
+    }
+    toggleBtn.addEventListener('click', ()=>{ setEnabled(!enabled); saveTutorialPref(enabled); });
+    document.getElementById('tutorialSkipBtn').addEventListener('click', ()=>advance(null));
+
+    window.fishOnLoadTutorialPref = async function(){
+      const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+      if(!client) return;
+      const { data:{session} } = await client.auth.getSession();
+      if(!session || !session.user) return;
+      try{
+        const { data } = await client.from('profiles').select('tutorial_enabled').eq('id', session.user.id).maybeSingle();
+        // No row / null value defaults to ON — matches "brand new users get the tutorial automatically."
+        const pref = (data && data.tutorial_enabled===false) ? false : true;
+        setEnabled(pref);
+      }catch(err){ console.error('Failed to load tutorial preference:', err); }
+    };
+  })();
 
   // A line break costs the lure that was in use (gone entirely) and one of
   // the line's 4 charges (25% each) — after 4 breaks, that spool is used up
@@ -1059,6 +1211,7 @@
 
   function doCast(p){
     window.fishOnSound.cast();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('cast_performed');
     const forceF = p/ANCHOR_FORCE;
     const lenF = lengthFactor(rodLength);
     const powF = POWER_FACTOR[power];
@@ -1210,6 +1363,7 @@
     peakReadout.textContent=p.toFixed(1)+' m/s²';
     meterFill.style.width=Math.min(100,(p/ANCHOR_FORCE)*100)+'%';
     casting=true; doCast(p);
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('auto_cast_used');
   });
 
   // Casting now enters the reeling state automatically when the lure lands.
@@ -1760,6 +1914,7 @@
     window.fishOnHaptic([30,40,30,40,30,40,90]);
     window.fishOnSound.catchSuccess();
     window.fishOnSound.stopRunAlert();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('fish_landed');
     showCatchPopup(
       visual,
       `Caught: ${f.name}<div style="font-size:13px;color:#9fb0b0;font-weight:400;">${f.weight.toFixed(1)} lb · ${tier}</div>`,
@@ -1958,6 +2113,7 @@ window.loadUserCatches = async function loadUserCatches() {
     iceboxLog.splice(idx, 1);
     renderIcebox();
     window.fishOnSound && window.fishOnSound.catchSuccess && window.fishOnSound.catchSuccess();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('fish_sold');
 
     if(client){
       try{
@@ -2308,6 +2464,7 @@ window.loadUserCatches = async function loadUserCatches() {
       reelSpeedFtPerSec = Math.min(10*speedMult, (d/dt)*RETRIEVE_FT_PER_RAD*speedMult);
       window.fishOnSound.reelClick();
       window.fishOnSound.stopFishOnCue();
+      window.fishOnTutorialEvent && window.fishOnTutorialEvent('reeling_performed');
       if(bailOpen || freeFalling){ bailOpen=false; freeFalling=false; updateBailVisual(); setStatus('Reeling — bail auto-closed.',''); }
     }
     wheelLastAngle=a; wheelLastTs=now;
@@ -2995,6 +3152,9 @@ if(supabaseClient){
         if(typeof window.loadOwnedGearForCastPanel === 'function') {
           window.loadOwnedGearForCastPanel();
         }
+        if(typeof window.fishOnLoadTutorialPref === 'function') {
+          window.fishOnLoadTutorialPref();
+        }
       }
       await updateAccountUI(session);
     });
@@ -3010,6 +3170,9 @@ if(supabaseClient){
         }
         if(typeof window.loadOwnedGearForCastPanel === 'function') {
           window.loadOwnedGearForCastPanel();
+        }
+        if(typeof window.fishOnLoadTutorialPref === 'function') {
+          window.fishOnLoadTutorialPref();
         }
       }
       await updateAccountUI(data.session);
