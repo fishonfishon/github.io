@@ -902,15 +902,17 @@
     rodm:{power:'medium',action:'moderate'}, rodm2:{power:'medium',action:'fast'},
     rodmh:{power:'mh',action:'moderate'}, rodmh2:{power:'mh',action:'fast'}, rodh:{power:'heavy',action:'fast'}
   };
-  const REEL_KEY_INFO = { reelred:0.10, reelblueblack:0.15, reelbluesilver:0.20, reelgold:0.40 };
+  const REEL_KEY_INFO = { reelbasic:0, reelred:0.10, reelblueblack:0.15, reelbluesilver:0.20, reelgold:0.40 };
   // Granted once to brand-new players so they're never stuck with nothing to
-  // play with before their first shop visit — a basic rod, reel, line, and a
-  // couple of the cheapest lures.
+  // play with before their first shop visit — the most basic possible rod,
+  // reel, line, and lure. purchase_price is 0 for all of these specifically
+  // so the shop can identify them as free starter gear and refuse to sell
+  // them back (see shop.html's sell logic).
   const STARTER_KIT = [
-    { gear_type:'rod', item_key:'rodm', spec_value:7, purchase_price:145, quantity:1 },
-    { gear_type:'reel', item_key:'reelred', spec_value:null, purchase_price:100, quantity:1 },
-    { gear_type:'mono_line', item_key:'lineyellow', spec_value:10, purchase_price:10, quantity:4 },
-    { gear_type:'lure', item_key:'hoochie1', spec_value:0.25, purchase_price:3, quantity:2 }
+    { gear_type:'rod', item_key:'rodl', spec_value:6, purchase_price:0, quantity:1 },
+    { gear_type:'reel', item_key:'reelbasic', spec_value:null, purchase_price:0, quantity:1 },
+    { gear_type:'mono_line', item_key:'lineyellow', spec_value:10, purchase_price:0, quantity:4 },
+    { gear_type:'lure', item_key:'jiglight', spec_value:0.75, purchase_price:0, quantity:1 }
   ];
   let ownedRods=[], ownedReels=[], ownedLines=[], ownedLures=[];
 
@@ -970,32 +972,41 @@
     if(ownedLures.length){ lureSel.value=0; applyLureSelection(0); }
   }
 
-  window.loadOwnedGearForCastPanel = async function(){
-    const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
-    if(!client) return;
-    const { data:{session} } = await client.auth.getSession();
-    if(!session || !session.user) return;
+  let gearLoadPromise = null;
+  window.loadOwnedGearForCastPanel = function(){
+    // If a load is already in flight, share it instead of starting a second
+    // independent check-then-insert — that race is exactly what let two
+    // separate calls both see "zero gear" and both grant a starter kit.
+    if(gearLoadPromise) return gearLoadPromise;
+    gearLoadPromise = (async ()=>{
+      const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+      if(!client) return;
+      const { data:{session} } = await client.auth.getSession();
+      if(!session || !session.user) return;
 
-    let { data, error } = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
-    if(error){ console.error('Failed to load owned gear:', error.message); return; }
+      let { data, error } = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
+      if(error){ console.error('Failed to load owned gear:', error.message); return; }
 
-    if(!data || data.length===0){
-      const rows = STARTER_KIT.map(k=>Object.assign({ player_id: session.user.id }, k));
-      const { error: insErr } = await client.from('FOFO Player Gear').insert(rows);
-      if(insErr){ console.error('Failed to grant starter kit:', insErr.message); }
-      else {
-        const noGearMsg = document.getElementById('noGearMsg');
-        if(noGearMsg) noGearMsg.style.display='block';
-        const retry = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
-        data = retry.data || [];
+      if(!data || data.length===0){
+        const rows = STARTER_KIT.map(k=>Object.assign({ player_id: session.user.id }, k));
+        const { error: insErr } = await client.from('FOFO Player Gear').insert(rows);
+        if(insErr){ console.error('Failed to grant starter kit:', insErr.message); }
+        else {
+          const noGearMsg = document.getElementById('noGearMsg');
+          if(noGearMsg) noGearMsg.style.display='block';
+          const retry = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
+          data = retry.data || [];
+        }
       }
-    }
 
-    ownedRods = data.filter(g=>g.gear_type==='rod');
-    ownedReels = data.filter(g=>g.gear_type==='reel');
-    ownedLines = data.filter(g=>g.gear_type==='mono_line'||g.gear_type==='braid_line');
-    ownedLures = data.filter(g=>g.gear_type==='lure');
-    populateGearDropdowns();
+      ownedRods = data.filter(g=>g.gear_type==='rod');
+      ownedReels = data.filter(g=>g.gear_type==='reel');
+      ownedLines = data.filter(g=>g.gear_type==='mono_line'||g.gear_type==='braid_line');
+      ownedLures = data.filter(g=>g.gear_type==='lure');
+      populateGearDropdowns();
+    })();
+    gearLoadPromise.finally(()=>{ gearLoadPromise = null; });
+    return gearLoadPromise;
   };
 
   // A line break costs the lure that was in use (gone entirely) and one of
