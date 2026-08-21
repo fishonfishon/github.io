@@ -1309,22 +1309,22 @@
   // it, and a deep specialist like halibut still won't show up in 20ft of water
   // just because 90% of 20ft is a small number).
   const FISH_DATA = [
-    { name:'Coho Salmon',            img:'coho.png',            category:'salmon',    priceLow:3.50, priceHigh:7.00,  pctLow:0.10, pctHigh:0.50, absMin:1,   absMax:300,  lureMin:1,    lureMax:3,   wMin:4,   wMax:35,  chMin:0.02,   chMax:0.0001 },
-    { name:'Pink Salmon',            img:'pink.png',            category:'salmon',    priceLow:1.25, priceHigh:1.80,  pctLow:0.10, pctHigh:0.35, absMin:1,   absMax:250,  lureMin:1,    lureMax:3,   wMin:3,   wMax:15,  chMin:0.035,  chMax:0.00035 },
-    { name:'Chinook Salmon',         img:'chinook.png',         category:'salmon',    priceLow:6.50, priceHigh:12.50, pctLow:0.70, pctHigh:0.90, absMin:100, absMax:400,  lureMin:2,    lureMax:5,   wMin:10,  wMax:125, chMin:0.0084, chMax:0.000024 },
-    { name:'Chum Salmon',            img:'chum.png',            category:'salmon',    priceLow:1.00, priceHigh:1.50,  pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:200,  lureMin:1.5,  lureMax:5,   wMin:10,  wMax:35,  chMin:0.02,   chMax:0.00015 },
-    { name:'Lingcod',                img:'lingcod.png',         category:'lingcod',   priceLow:3.00, priceHigh:7.00,  pctLow:0.80, pctHigh:1.00, absMin:15,  absMax:350,  lureMin:2,    lureMax:5,   wMin:5,   wMax:86,  chMin:0.015,  chMax:0.00005 },
-    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', priceLow:0.50, priceHigh:0.75,  photoScale:0.5, pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
-    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', priceLow:0.75, priceHigh:1.50,  photoScale:0.5, pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
-    { name:'Copper Rockfish',        img:'copper.png',          category:'rockfish',  priceLow:2.00, priceHigh:4.00,  pctLow:0.40, pctHigh:1.00, absMin:30,  absMax:400,  lureMin:1,    lureMax:2,   wMin:1,   wMax:10,  chMin:0.012,  chMax:0.00015 },
-    { name:'Quillback Rockfish',     img:'quillback.png',       category:'rockfish',  priceLow:2.00, priceHigh:4.50,  pctLow:0.60, pctHigh:1.00, absMin:60,  absMax:500,  lureMin:1.5,  lureMax:2.5, wMin:1,   wMax:7.5, chMin:0.009,  chMax:0.00008 },
-    { name:'Black Rockfish',         img:'black.png',           category:'rockfish',  priceLow:1.80, priceHigh:3.50,  pctLow:0.50, pctHigh:1.00, absMin:20,  absMax:500,  lureMin:1,    lureMax:2,   wMin:1,   wMax:13,  chMin:0.016,  chMax:0.00012 },
-    { name:'Starry Flounder',        img:'flounder.png',        category:'flounder',  priceLow:1.20, priceHigh:2.50,  pctLow:0.85, pctHigh:1.00, absMin:1,   absMax:800,  lureMin:1.5,  lureMax:7,   wMin:1,   wMax:20,  chMin:0.04,   chMax:0.00016 },
-    { name:'Sole',                   img:'sole.png',            category:'sole',      priceLow:1.50, priceHigh:3.20,  pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:800,  lureMin:0.5,  lureMax:2,   wMin:0.5, wMax:8,   chMin:0.024,  chMax:0.00024 },
-    { name:'Sea-Run Cutthroat',      img:'cutthroat.png',       category:'trout',     priceLow:0.50, priceHigh:1.25,  pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:50,   lureMin:0.25, lureMax:1,   wMin:1,   wMax:7,   chMin:0.015,  chMax:0.0025 },
-    { name:'Halibut',                img:'halibut.png',         category:'halibut',   priceLow:7.50, priceHigh:13.50, pctLow:0.90, pctHigh:1.00, absMin:250, absMax:1000, lureMin:3,    lureMax:7,   wMin:15,  wMax:482, chMin:0.0002, chMax:0.0000001 },
-    { name:'Squid',                  img:'squid.png',           category:'squid',     priceLow:2.00, priceHigh:4.50,  pctLow:0.60, pctHigh:0.85, absMin:15,  absMax:1000, lureMin:0.25, lureMax:2,   wMin:0.1, wMax:15,  chMin:0.02,   chMax:0.0002 },
-    { name:'Dogfish',                img:'dogfish.png',         category:'dogfish',   priceLow:0,    priceHigh:0,     pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:1000, lureMin:1.5,  lureMax:7,   wMin:2,   wMax:20,  chMin:0.002,  chMax:0.000025 }
+    { name:'Coho Salmon',            img:'coho.png',            category:'salmon',    priceLow:7.50, priceHigh:11.00,  pctLow:0.10, pctHigh:0.50, absMin:1,   absMax:300,  lureMin:1,    lureMax:3,   wMin:4,   wMax:35,  chMin:0.02,   chMax:0.0001 },
+    { name:'Pink Salmon',            img:'pink.png',            category:'salmon',    priceLow:3.50, priceHigh:5.00,  pctLow:0.10, pctHigh:0.35, absMin:1,   absMax:250,  lureMin:1,    lureMax:3,   wMin:3,   wMax:15,  chMin:0.035,  chMax:0.00035 },
+    { name:'Chinook Salmon',         img:'chinook.png',         category:'salmon',    priceLow:11.00, priceHigh:17.00, pctLow:0.70, pctHigh:0.90, absMin:100, absMax:400,  lureMin:2,    lureMax:5,   wMin:10,  wMax:125, chMin:0.0084, chMax:0.000024 },
+    { name:'Chum Salmon',            img:'chum.png',            category:'salmon',    priceLow:3.00, priceHigh:5.00,  pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:200,  lureMin:1.5,  lureMax:5,   wMin:10,  wMax:35,  chMin:0.02,   chMax:0.00015 },
+    { name:'Lingcod',                img:'lingcod.png',         category:'lingcod',   priceLow:5.00, priceHigh:12.00,  pctLow:0.80, pctHigh:1.00, absMin:15,  absMax:350,  lureMin:2,    lureMax:5,   wMin:5,   wMax:86,  chMin:0.015,  chMax:0.00005 },
+    { name:'Kelp Greenling',         img:'kelp.png',            category:'greenling', priceLow:1.50, priceHigh:4.50,  photoScale:0.5, pctLow:0.05, pctHigh:1.00, absMin:1,   absMax:500,  lureMin:0.5,  lureMax:2,   wMin:1,   wMax:4.5, chMin:0.032,  chMax:0.0008 },
+    { name:'White-Spotted Greenling',img:'white.png',           category:'greenling', priceLow:1.75, priceHigh:6.00,  photoScale:0.5, pctLow:0.05, pctHigh:0.70, absMin:1,   absMax:120,  lureMin:0.25, lureMax:2,   wMin:0.5, wMax:3,   chMin:0.032,  chMax:0.0016 },
+    { name:'Copper Rockfish',        img:'copper.png',          category:'rockfish',  priceLow:8.00, priceHigh:13.00,  pctLow:0.40, pctHigh:1.00, absMin:30,  absMax:400,  lureMin:1,    lureMax:2,   wMin:1,   wMax:10,  chMin:0.012,  chMax:0.00015 },
+    { name:'Quillback Rockfish',     img:'quillback.png',       category:'rockfish',  priceLow:7.50, priceHigh:11.50,  pctLow:0.60, pctHigh:1.00, absMin:60,  absMax:500,  lureMin:1.5,  lureMax:2.5, wMin:1,   wMax:7.5, chMin:0.009,  chMax:0.00008 },
+    { name:'Black Rockfish',         img:'black.png',           category:'rockfish',  priceLow:9.00, priceHigh:14.00,  pctLow:0.50, pctHigh:1.00, absMin:20,  absMax:500,  lureMin:1,    lureMax:2,   wMin:1,   wMax:13,  chMin:0.016,  chMax:0.00012 },
+    { name:'Starry Flounder',        img:'flounder.png',        category:'flounder',  priceLow:6.50, priceHigh:11.00,  pctLow:0.85, pctHigh:1.00, absMin:1,   absMax:800,  lureMin:1.5,  lureMax:7,   wMin:1,   wMax:20,  chMin:0.04,   chMax:0.00016 },
+    { name:'Sole',                   img:'sole.png',            category:'sole',      priceLow:3.00, priceHigh:5.00,  pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:800,  lureMin:0.5,  lureMax:2,   wMin:0.5, wMax:8,   chMin:0.024,  chMax:0.00024 },
+    { name:'Sea-Run Cutthroat',      img:'cutthroat.png',       category:'trout',     priceLow:7.50, priceHigh:10.00,  pctLow:0.05, pctHigh:0.40, absMin:1,   absMax:50,   lureMin:0.25, lureMax:1,   wMin:1,   wMax:7,   chMin:0.015,  chMax:0.0025 },
+    { name:'Halibut',                img:'halibut.png',         category:'halibut',   priceLow:15.00, priceHigh:25.00, pctLow:0.90, pctHigh:1.00, absMin:250, absMax:1000, lureMin:3,    lureMax:7,   wMin:15,  wMax:482, chMin:0.0002, chMax:0.0000001 },
+    { name:'Squid',                  img:'squid.png',           category:'squid',     priceLow:5.00, priceHigh:10.00,  pctLow:0.60, pctHigh:0.85, absMin:15,  absMax:1000, lureMin:0.25, lureMax:2,   wMin:0.1, wMax:15,  chMin:0.02,   chMax:0.0002 },
+    { name:'Dogfish',                img:'dogfish.png',         category:'dogfish',   priceLow:5.00,    priceHigh:10.00,     pctLow:0.85, pctHigh:1.00, absMin:10,  absMax:1000, lureMin:1.5,  lureMax:7,   wMin:2,   wMax:20,  chMin:0.002,  chMax:0.000025 }
   ];
   function lerp(a,b,f){ return a+(b-a)*f; }
   // The band a species actually occupies AT A GIVEN LOCATION, given that spot's
@@ -1897,7 +1897,7 @@ window.loadUserCatches = async function loadUserCatches() {
   function calcSalePrice(entry){
     const species = speciesFor(entry);
     if(!species) return 0;
-    const cleanedWeight = entry.weight * 0.6;
+    const cleanedWeight = entry.weight * 0.8;
     const pricePerLb = currentMarketPrices[species.name] || 0;
     const freshness = freshnessMultiplier(hoursSinceCatch(entry));
     return cleanedWeight * pricePerLb * freshness;
