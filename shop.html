@@ -535,6 +535,8 @@ document.getElementById('checkoutBtn').addEventListener('click', async ()=>{
 });
 
 // ======================= SELL =======================
+const STARTER_ITEM_IMAGES = { reelbasic: 'reelred.png' }; // visual stand-in only — reelbasic isn't a purchasable catalog item
+
 function renderSell(){
   let filtered = [];
   if(category==='rods_reels') filtered = ownedGear.filter(g=>g.gear_type==='rod'||g.gear_type==='reel');
@@ -548,14 +550,22 @@ function renderSell(){
   const grid = document.getElementById('sellGrid');
   filtered.forEach(g=>{
     const cat = catalogLookup(g.gear_type, g.item_key);
-    const img = cat ? cat.img : '';
-    const sellPrice = (g.purchase_price/(g.quantity||1))*0.5;
+    const img = cat ? cat.img : (STARTER_ITEM_IMAGES[g.item_key] || '');
+    const isFreeStarter = Number(g.purchase_price) === 0;
+    const sellPrice = isFreeStarter ? 0 : (g.purchase_price/(g.quantity||1))*0.5;
     const isLine = g.gear_type==='mono_line'||g.gear_type==='braid_line';
     const qtyLabel = isLine ? (g.quantity+'/4 uses left') : (g.quantity>1 ? ('x'+g.quantity) : '');
     const card = document.createElement('div');
     card.className = 'item-card';
-    card.innerHTML = `<img src="gear/${img}" alt=""><div class="name">${g.gear_type.replace('_',' ')} ${g.spec_value?('('+g.spec_value+(g.gear_type==='rod'?'ft':g.gear_type==='lure'?'oz':'lb')+')'):''}${qtyLabel?' '+qtyLabel:''}</div><div class="price">sell $${sellPrice.toFixed(2)}${g.quantity>1 && !isLine?' ea':''}</div>`;
-    card.addEventListener('click', ()=>openSellDetail(g, cat, sellPrice));
+    const priceHtml = isFreeStarter
+      ? '<div class="price" style="color:#c9bda8;">starter gear — not sellable</div>'
+      : `<div class="price">sell $${sellPrice.toFixed(2)}${g.quantity>1 && !isLine?' ea':''}</div>`;
+    card.innerHTML = `<img src="gear/${img}" alt=""><div class="name">${g.gear_type.replace('_',' ')} ${g.spec_value?('('+g.spec_value+(g.gear_type==='rod'?'ft':g.gear_type==='lure'?'oz':'lb')+')'):''}${qtyLabel?' '+qtyLabel:''}</div>${priceHtml}`;
+    if(!isFreeStarter){
+      card.addEventListener('click', ()=>openSellDetail(g, cat, sellPrice));
+    } else {
+      card.style.opacity = '0.65'; card.style.cursor = 'default';
+    }
     grid.appendChild(card);
   });
 }
