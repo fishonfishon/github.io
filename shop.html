@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FOFO Fishing Stop | Gear Shop</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="icon" type="image/png" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f2b2e; --paper:#eef1ee; --accent:#d0703c; --ok:#5fcf6e; --bad:#d0453c;
+    --line:rgba(255,255,255,0.18); --wood:#5e3d22; --wood-dark:#3a2313;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--paper);}
+  body{
+    background:
+      linear-gradient(rgba(15,20,20,0.62), rgba(15,20,20,0.72)),
+      url('gear/fofoshop.jpeg') center/cover fixed no-repeat;
+    min-height:100vh; padding-bottom:40px;
+  }
+  a{color:var(--accent);}
+  .wrap{max-width:900px;margin:0 auto;padding:14px 16px 40px;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 16px;flex-wrap:wrap;gap:10px;}
+  header h1{font-family:'Kalam',cursive;font-size:26px;margin:0;text-shadow:0 2px 6px rgba(0,0,0,0.6);}
+  #walletBox{
+    background:rgba(20,15,10,0.75); border:2px solid var(--wood); border-radius:10px;
+    padding:8px 16px; font-weight:800; font-size:15px; box-shadow:0 3px 10px rgba(0,0,0,0.4);
+  }
+  #walletBox span{color:var(--ok);}
+
+  .panel-card{
+    background:rgba(20,16,12,0.82); border:2px solid var(--wood); border-radius:12px;
+    padding:16px; margin-bottom:16px; box-shadow:0 4px 16px rgba(0,0,0,0.4);
+  }
+
+  .big-btn-row{display:flex; gap:14px; margin-bottom:16px;}
+  .big-btn{
+    flex:1; padding:22px 10px; border-radius:12px; border:2px solid var(--wood);
+    background:rgba(20,16,12,0.82); color:var(--paper); font-family:'Kalam',cursive;
+    font-size:20px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.4);
+  }
+  .big-btn.active{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
+  .big-btn:active{ transform:scale(0.98); }
+
+  .cat-btn-row{display:flex; gap:10px; margin-bottom:16px;}
+  .cat-btn{
+    flex:1; padding:12px 6px; border-radius:9px; border:1px solid var(--line);
+    background:rgba(255,255,255,0.06); color:var(--paper); font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .cat-btn.active{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
+
+  .section-title{font-family:'Kalam',cursive;font-size:18px;margin:6px 0 10px;color:#f4e9c9;}
+
+  .card-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:14px;}
+  .item-card{
+    background:rgba(255,255,255,0.06); border:1px solid var(--line); border-radius:10px;
+    padding:10px 8px; cursor:pointer; text-align:center;
+  }
+  .item-card:active{ background:rgba(255,255,255,0.12); }
+  .item-card img{width:100%; height:64px; object-fit:contain; margin-bottom:6px;}
+  .item-card .name{font-size:11.5px; font-weight:700; line-height:1.25;}
+  .item-card .price{font-size:11px; color:var(--ok); margin-top:3px;}
+
+  #detailOverlay{
+    position:fixed; inset:0; z-index:80; background:rgba(0,0,0,0.6);
+    display:none; align-items:center; justify-content:center; padding:16px;
+  }
+  #detailOverlay.show{ display:flex; }
+  .detail-card{
+    width:100%; max-width:380px; background:#241a10; border:3px solid var(--wood);
+    border-radius:14px; padding:20px; box-shadow:0 8px 30px rgba(0,0,0,0.6); position:relative;
+    max-height:90vh; overflow-y:auto;
+  }
+  .detail-close{position:absolute; top:10px; right:12px; background:none; border:none; color:#c9bda8; font-size:22px; cursor:pointer;}
+  .detail-card img{width:100%; max-height:130px; object-fit:contain; margin-bottom:10px;}
+  .detail-card h3{font-family:'Kalam',cursive; margin:0 0 6px; font-size:19px;}
+  .detail-card .desc{font-size:12.5px; color:#c9bda8; margin-bottom:12px; line-height:1.4;}
+  .detail-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:13px;}
+  .detail-row label{color:#c9bda8;}
+  .spec-slider{width:100%; margin:6px 0 4px;}
+  .toggle-row{display:flex; gap:8px; margin-bottom:12px;}
+  .toggle-row button{
+    flex:1; padding:9px; border-radius:8px; border:1px solid var(--line); background:rgba(255,255,255,0.06);
+    color:var(--paper); font-size:12.5px; font-weight:700; cursor:pointer;
+  }
+  .toggle-row button.active{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
+  .detail-price{font-size:20px; font-weight:800; color:var(--ok); text-align:center; margin:10px 0;}
+  .detail-buy-btn{
+    width:100%; padding:12px; border-radius:9px; border:none; background:var(--ok);
+    color:#0d1f18; font-weight:800; font-size:14px; cursor:pointer;
+  }
+  .detail-sell-btn{
+    width:100%; padding:12px; border-radius:9px; border:none; background:var(--bad);
+    color:#fff; font-weight:800; font-size:14px; cursor:pointer;
+  }
+  .qty-row{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px;}
+  .qty-row button{width:36px; height:36px; border-radius:50%; border:1px solid var(--line); background:rgba(255,255,255,0.08); color:var(--paper); font-size:18px; cursor:pointer;}
+  .qty-row .qty-val{font-size:18px; font-weight:800; min-width:30px; text-align:center;}
+
+  #cartBtn{
+    position:fixed; bottom:16px; right:16px; z-index:70; padding:12px 18px; border-radius:24px;
+    background:var(--accent); color:#1a1210; border:2px solid #8a4324; font-weight:800; font-size:13px;
+    cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.5); display:none;
+  }
+  #cartBtn.show{ display:block; }
+
+  #cartOverlay{
+    position:fixed; inset:0; z-index:85; background:rgba(0,0,0,0.65);
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  #cartOverlay.show{ display:flex; }
+  .cart-sheet{
+    width:100%; max-width:480px; max-height:80vh; overflow-y:auto;
+    background:#241a10; border:3px solid var(--wood); border-radius:16px 16px 0 0;
+    padding:18px; box-shadow:0 -6px 24px rgba(0,0,0,0.6);
+  }
+  .cart-sheet h3{font-family:'Kalam',cursive; margin:0 0 12px; font-size:20px;}
+  .cart-line{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.1);}
+  .cart-line .ci{flex:1; font-size:12.5px;}
+  .cart-line .cp{font-size:12.5px; font-weight:700; color:var(--ok);}
+  .cart-line button{background:none; border:none; color:var(--bad); font-size:18px; cursor:pointer; padding:0 4px;}
+  .cart-total{display:flex; justify-content:space-between; font-size:16px; font-weight:800; margin:14px 0;}
+  #checkoutBtn{width:100%; padding:13px; border-radius:9px; border:none; background:var(--ok); color:#0d1f18; font-weight:800; font-size:15px; cursor:pointer;}
+  #cartCloseBtn{width:100%; padding:9px; margin-top:8px; border-radius:9px; border:1px solid var(--line); background:transparent; color:var(--paper); cursor:pointer;}
+  #cartMsg{font-size:12px; text-align:center; margin-top:8px; min-height:16px;}
+
+  .empty-msg{text-align:center; color:#c9bda8; font-size:13px; padding:20px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎣 FOFO Fishing Stop</h1>
+    <div id="walletBox">💰 Wallet: <span id="walletBalance">$0.00</span></div>
+  </header>
+
+  <div class="big-btn-row">
+    <button class="big-btn" id="buyModeBtn">BUY GEAR</button>
+    <button class="big-btn" id="sellModeBtn">SELL GEAR</button>
+  </div>
+
+  <div class="cat-btn-row" id="catRow" style="display:none;">
+    <button class="cat-btn" data-cat="rods_reels">Rods &amp; Reels</button>
+    <button class="cat-btn" data-cat="lines">Lines</button>
+    <button class="cat-btn" data-cat="lures">Lures</button>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<button id="cartBtn">🛒 Cart (<span id="cartCount">0</span>) — $<span id="cartTotal">0.00</span></button>
+
+<div id="detailOverlay">
+  <div class="detail-card" id="detailCard"></div>
+</div>
+
+<div id="cartOverlay">
+  <div class="cart-sheet">
+    <h3>Your Cart</h3>
+    <div id="cartLines"></div>
+    <div class="cart-total"><span>Total</span><span id="cartSheetTotal">$0.00</span></div>
+    <button id="checkoutBtn">Check Out</button>
+    <button id="cartCloseBtn">Keep Shopping</button>
+    <div id="cartMsg"></div>
+  </div>
+</div>
+
+<script>
+// ======================= CATALOG =======================
+const ROD_CATALOG = [
+  { key:'rodl',   img:'rodl.png',   basePrice:125, baseFt:6, maxFt:8,  addPerFt:50, desc:'Light Strength - Slow Rod',        power:'light',  action:'slow' },
+  { key:'rodml',  img:'rodml.png',  basePrice:150, baseFt:6, maxFt:9,  addPerFt:50, desc:'Medium Light Strength - Moderate Rod', power:'lm',   action:'moderate' },
+  { key:'rodml2', img:'rodml2.png', basePrice:175, baseFt:7, maxFt:10, addPerFt:50, desc:'Medium Light Strength - Fast Rod', power:'lm',     action:'fast' },
+  { key:'rodm',   img:'rodm.png',   basePrice:145, baseFt:7, maxFt:10, addPerFt:50, desc:'Medium Strength - Moderate Rod',   power:'medium', action:'moderate' },
+  { key:'rodm2',  img:'rodm2.png',  basePrice:165, baseFt:7, maxFt:11, addPerFt:50, desc:'Medium Strength - Fast Rod',       power:'medium', action:'fast' },
+  { key:'rodmh',  img:'rodmh.png',  basePrice:185, baseFt:7, maxFt:10, addPerFt:50, desc:'Medium Heavy Strength - Moderate Rod', power:'mh',  action:'moderate' },
+  { key:'rodmh2', img:'rodmh2.png', basePrice:195, baseFt:8, maxFt:11, addPerFt:50, desc:'Medium Heavy Strength - Fast Rod', power:'mh',     action:'fast' },
+  { key:'rodh',   img:'rodh.png',   basePrice:205, baseFt:9, maxFt:11, addPerFt:50, desc:'Heavy Strength - Fast Rod',        power:'heavy',  action:'fast' }
+];
+const REEL_CATALOG = [
+  { key:'reelred',        img:'reelred.png',        price:100, speedBonus:0.10, desc:'Reels 10% faster without losing line strength' },
+  { key:'reelblueblack',  img:'reelblueblack.png',  price:175, speedBonus:0.15, desc:'Reels 15% faster without losing line strength' },
+  { key:'reelbluesilver', img:'reelbluesilver.png', price:300, speedBonus:0.20, desc:'Reels 20% faster without losing line strength' },
+  { key:'reelgold',       img:'reelgold.png',       price:550, speedBonus:0.40, desc:'Reels 40% faster without losing line strength' }
+];
+const MONO_LINE_CATALOG = [
+  { key:'lineyellow', img:'lineyellow.png', basePrice:10, baseLb:10, maxLb:30,  addPerLb:1 },
+  { key:'linepink',   img:'linepink.png',   basePrice:15, baseLb:20, maxLb:40,  addPerLb:1 },
+  { key:'linegreen',  img:'linegreen.png',  basePrice:20, baseLb:30, maxLb:60,  addPerLb:1 },
+  { key:'lineblue',   img:'lineblue.png',   basePrice:25, baseLb:40, maxLb:80,  addPerLb:1 },
+  { key:'lineblack',  img:'lineblack.png',  basePrice:30, baseLb:50, maxLb:100, addPerLb:1 }
+];
+const BRAID_LINE_CATALOG = [
+  { key:'lineyellow', img:'lineyellow.png', basePrice:20, baseLb:10, maxLb:50,  addPerLb:1, desc:'adds 5% casting distance and 5% reeling strength' },
+  { key:'linepink',   img:'linepink.png',   basePrice:25, baseLb:20, maxLb:60,  addPerLb:1, desc:'adds 5% casting distance and 5% reeling strength' },
+  { key:'linegreen',  img:'linegreen.png',  basePrice:30, baseLb:30, maxLb:80,  addPerLb:1, desc:'adds 5% casting distance and 5% reeling strength' },
+  { key:'lineblue',   img:'lineblue.png',   basePrice:35, baseLb:40, maxLb:110, addPerLb:1, desc:'adds 5% casting distance and 5% reeling strength' },
+  { key:'lineblack',  img:'lineblack.png',  basePrice:40, baseLb:50, maxLb:150, addPerLb:1, desc:'adds 5% casting distance and 5% reeling strength' }
+];
+const LURE_CATALOG = [
+  { key:'hoochie1',   img:'hoochie1.png',   basePrice:3,    baseOz:0.25, maxOz:2, stepOz:0.25, addPerStep:1, desc:'pack of 1x hoochie jig',     packSize:1,  category:'individual' },
+  { key:'hoochie2',   img:'hoochie2.png',   basePrice:3,    baseOz:0.25, maxOz:2, stepOz:0.25, addPerStep:1, desc:'pack of 1x hoochie jig',     packSize:1,  category:'individual' },
+  { key:'hoochie3',   img:'hoochie3.png',   basePrice:3,    baseOz:0.25, maxOz:2, stepOz:0.25, addPerStep:1, desc:'pack of 1x hoochie jig',     packSize:1,  category:'individual' },
+  { key:'jigheavy1',  img:'jigheavy1.png',  basePrice:7.5,  baseOz:3.0,  maxOz:7, stepOz:1,    addPerStep:1, desc:'pack of 1x metal jig',       packSize:1,  category:'individual' },
+  { key:'jigheavy2',  img:'jigheavy2.png',  basePrice:7.5,  baseOz:3.0,  maxOz:7, stepOz:1,    addPerStep:1, desc:'pack of 1x metal jig',       packSize:1,  category:'individual' },
+  { key:'jigheavy3',  img:'jigheavy3.png',  basePrice:7.5,  baseOz:3.0,  maxOz:7, stepOz:1,    addPerStep:1, desc:'pack of 1x metal jig',       packSize:1,  category:'individual' },
+  { key:'jiglight',   img:'jiglight.png',   basePrice:30,   baseOz:0.75, maxOz:3, stepOz:1,    addPerStep:5, desc:'pack of 5x metal jigs',      packSize:5,  category:'packaged' },
+  { key:'jigmedium1', img:'jigmedium1.png', basePrice:35,   baseOz:1.5,  maxOz:5, stepOz:1,    addPerStep:5, desc:'pack of 5x metal jigs',      packSize:5,  category:'packaged' },
+  { key:'jigmedium2', img:'jigmedium2.png', basePrice:35,   baseOz:1.5,  maxOz:5, stepOz:1,    addPerStep:5, desc:'pack of 5x metal jigs',      packSize:5,  category:'packaged' },
+  { key:'plastic1',   img:'plastic1.png',   basePrice:45,   baseOz:3.0,  maxOz:7, stepOz:1,    addPerStep:10,desc:'pack of 10x plastic jigs',   packSize:10, category:'packaged' }
+];
+
+// ======================= SUPABASE =======================
+const SUPABASE_URL = 'https://kgwfzmqswzfdknwneffd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtnd2Z6bXFzd3pmZGtud25lZmZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNzY2NDYsImV4cCI6MjEwMjc1MjY0Nn0.8nTEgK11VEmlhOmAzdpV9UXhexGBF4W0aZW-nxxhYn8';
+let supabaseClient = null;
+if(window.supabase){ supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+
+let walletBalance = 0;
+function updateWalletUI(){ document.getElementById('walletBalance').textContent = '$'+walletBalance.toFixed(2); }
+async function loadWallet(){
+  if(!supabaseClient) return;
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session || !session.user) return null;
+  const { data } = await supabaseClient.from('FOFO Wallet').select('*').eq('player_id', session.user.id).maybeSingle();
+  walletBalance = data ? Number(data.balance)||0 : 0;
+  updateWalletUI();
+  return session.user;
+}
+async function saveWallet(userId){
+  if(!supabaseClient) return;
+  await supabaseClient.from('FOFO Wallet').upsert({ player_id:userId, balance:walletBalance });
+}
+
+// ======================= STATE =======================
+let mode = null; // 'buy' | 'sell'
+let category = null; // 'rods_reels' | 'lines' | 'lures'
+let cart = []; // {label, img, category, price, spec}
+let ownedGear = [];
+let currentUser = null;
+
+const contentEl = document.getElementById('content');
+const catRow = document.getElementById('catRow');
+
+document.getElementById('buyModeBtn').addEventListener('click', ()=>setMode('buy'));
+document.getElementById('sellModeBtn').addEventListener('click', ()=>setMode('sell'));
+document.querySelectorAll('.cat-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>setCategory(btn.dataset.cat));
+});
+
+function setMode(m){
+  mode = m; category = null;
+  document.getElementById('buyModeBtn').classList.toggle('active', m==='buy');
+  document.getElementById('sellModeBtn').classList.toggle('active', m==='sell');
+  catRow.style.display='flex';
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  contentEl.innerHTML = '<div class="empty-msg">Choose a category above.</div>';
+  updateCartBtn();
+  if(m==='sell') loadOwnedGear();
+}
+function setCategory(c){
+  category = c;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('active', b.dataset.cat===c));
+  render();
+}
+
+async function loadOwnedGear(){
+  if(!supabaseClient || !currentUser){ ownedGear=[]; render(); return; }
+  const { data, error } = await supabaseClient.from('FOFO Player Gear')
+    .select('*').eq('player_id', currentUser.id).eq('is_broken', false)
+    .order('created_at', { ascending:false });
+  if(error){ console.error('Failed to load owned gear:', error.message); ownedGear=[]; }
+  else ownedGear = data || [];
+  render();
+}
+
+function catalogLookup(gearType, key){
+  if(gearType==='rod') return ROD_CATALOG.find(r=>r.key===key);
+  if(gearType==='reel') return REEL_CATALOG.find(r=>r.key===key);
+  if(gearType==='mono_line') return MONO_LINE_CATALOG.find(r=>r.key===key);
+  if(gearType==='braid_line') return BRAID_LINE_CATALOG.find(r=>r.key===key);
+  if(gearType==='lure') return LURE_CATALOG.find(r=>r.key===key);
+  return null;
+}
+
+// ======================= RENDER =======================
+function render(){
+  if(!category){ contentEl.innerHTML = '<div class="empty-msg">Choose a category above.</div>'; return; }
+  if(mode==='buy') renderBuy();
+  else renderSell();
+}
+
+function renderBuy(){
+  let html = '';
+  if(category==='rods_reels'){
+    html += '<div class="section-title">Rods</div><div class="card-grid" id="rodGrid"></div>';
+    html += '<div class="section-title">Reels</div><div class="card-grid" id="reelGrid"></div>';
+  } else if(category==='lines'){
+    html += '<div class="section-title">Lines (choose a spool, then mono or braid)</div><div class="card-grid" id="lineGrid"></div>';
+  } else if(category==='lures'){
+    html += '<div class="section-title">Individual Lures</div><div class="card-grid" id="lureIndivGrid"></div>';
+    html += '<div class="section-title">Packaged Lures</div><div class="card-grid" id="luresPackGrid"></div>';
+  }
+  contentEl.innerHTML = html;
+
+  if(category==='rods_reels'){
+    fillGrid('rodGrid', ROD_CATALOG, r=>`from $${r.basePrice}`, r=>openRodDetail(r));
+    fillGrid('reelGrid', REEL_CATALOG, r=>`$${r.price}`, r=>openReelDetail(r));
+  } else if(category==='lines'){
+    // lowest base spec to highest, mono base used for sort (they're already in that order in the array)
+    fillGrid('lineGrid', MONO_LINE_CATALOG, r=>`from $${r.basePrice}`, r=>openLineDetail(r.key));
+  } else if(category==='lures'){
+    fillGrid('lureIndivGrid', LURE_CATALOG.filter(l=>l.category==='individual'), l=>`from $${l.basePrice}`, l=>openLureDetail(l));
+    fillGrid('luresPackGrid', LURE_CATALOG.filter(l=>l.category==='packaged'), l=>`from $${l.basePrice}`, l=>openLureDetail(l));
+  }
+}
+
+function fillGrid(gridId, items, priceLabelFn, onClick){
+  const grid = document.getElementById(gridId);
+  items.forEach(item=>{
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.innerHTML = `<img src="gear/${item.img}" alt=""><div class="name">${item.desc||item.key}</div><div class="price">${priceLabelFn(item)}</div>`;
+    card.addEventListener('click', ()=>onClick(item));
+    grid.appendChild(card);
+  });
+}
+
+// ---- Detail overlays (buy) ----
+const detailOverlay = document.getElementById('detailOverlay');
+const detailCard = document.getElementById('detailCard');
+function closeDetail(){ detailOverlay.classList.remove('show'); }
+detailOverlay.addEventListener('click', e=>{ if(e.target===detailOverlay) closeDetail(); });
+
+function openRodDetail(rod){
+  let ft = rod.baseFt;
+  const render = ()=>{
+    const price = rod.basePrice + (ft-rod.baseFt)*rod.addPerFt;
+    detailCard.innerHTML = `
+      <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+      <img src="gear/${rod.img}" alt="">
+      <h3>${rod.desc}</h3>
+      <div class="desc">Power: ${rod.power} &middot; Action: ${rod.action}</div>
+      <div class="detail-row"><label>Length</label><span>${ft} ft</span></div>
+      <input type="range" class="spec-slider" min="${rod.baseFt}" max="${rod.maxFt}" step="1" value="${ft}" id="rodFtSlider">
+      <div class="detail-price">$${price.toFixed(2)}</div>
+      <button class="detail-buy-btn" id="rodAddBtn">Add to Cart</button>
+    `;
+    document.getElementById('rodFtSlider').addEventListener('input', e=>{ ft=parseInt(e.target.value); render(); });
+    document.getElementById('rodAddBtn').addEventListener('click', ()=>{
+      addToCart({
+        gearType:'rod', itemKey:rod.key, label:`${rod.desc} (${ft}ft)`, img:rod.img,
+        specValue:ft, lineType:null, price, quantity:1
+      });
+      closeDetail();
+    });
+  };
+  render();
+  detailOverlay.classList.add('show');
+}
+
+function openReelDetail(reel){
+  detailCard.innerHTML = `
+    <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+    <img src="gear/${reel.img}" alt="">
+    <h3>Reel</h3>
+    <div class="desc">${reel.desc}</div>
+    <div class="detail-price">$${reel.price.toFixed(2)}</div>
+    <button class="detail-buy-btn" id="reelAddBtn">Add to Cart</button>
+  `;
+  document.getElementById('reelAddBtn').addEventListener('click', ()=>{
+    addToCart({ gearType:'reel', itemKey:reel.key, label:'Reel ('+reel.desc.split(' ')[2]+' faster)', img:reel.img, specValue:null, lineType:null, price:reel.price, quantity:1 });
+    closeDetail();
+  });
+  detailOverlay.classList.add('show');
+}
+
+function openLineDetail(colorKey){
+  let type = 'mono';
+  let lb = 0;
+  const render = ()=>{
+    const cat = type==='mono' ? MONO_LINE_CATALOG.find(l=>l.key===colorKey) : BRAID_LINE_CATALOG.find(l=>l.key===colorKey);
+    if(lb < cat.baseLb || lb === 0) lb = cat.baseLb;
+    if(lb > cat.maxLb) lb = cat.maxLb;
+    const price = cat.basePrice + (lb-cat.baseLb)*cat.addPerLb;
+    detailCard.innerHTML = `
+      <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+      <img src="gear/${cat.img}" alt="">
+      <h3>${colorKey.replace('line','').replace(/^\\w/,c=>c.toUpperCase())} Line</h3>
+      <div class="toggle-row">
+        <button id="typeMonoBtn" class="${type==='mono'?'active':''}">Mono</button>
+        <button id="typeBraidBtn" class="${type==='braid'?'active':''}">Braid</button>
+      </div>
+      <div class="desc">${type==='mono' ? 'mono line' : 'adds 5% casting distance and 5% reeling strength'}</div>
+      <div class="detail-row"><label>Line test</label><span>${lb} lb</span></div>
+      <input type="range" class="spec-slider" min="${cat.baseLb}" max="${cat.maxLb}" step="1" value="${lb}" id="lineLbSlider">
+      <div class="detail-price">$${price.toFixed(2)}</div>
+      <button class="detail-buy-btn" id="lineAddBtn">Add to Cart</button>
+    `;
+    document.getElementById('typeMonoBtn').addEventListener('click', ()=>{ type='mono'; lb=0; render(); });
+    document.getElementById('typeBraidBtn').addEventListener('click', ()=>{ type='braid'; lb=0; render(); });
+    document.getElementById('lineLbSlider').addEventListener('input', e=>{ lb=parseInt(e.target.value); render(); });
+    document.getElementById('lineAddBtn').addEventListener('click', ()=>{
+      addToCart({
+        gearType: type==='mono'?'mono_line':'braid_line', itemKey:colorKey,
+        label:`${colorKey.replace('line','')} ${type} ${lb}lb`, img:cat.img,
+        specValue:lb, lineType:type, price, quantity:1
+      });
+      closeDetail();
+    });
+  };
+  render();
+  detailOverlay.classList.add('show');
+}
+
+function openLureDetail(lure){
+  let oz = lure.baseOz;
+  const render = ()=>{
+    const steps = Math.round((oz-lure.baseOz)/lure.stepOz);
+    const price = lure.basePrice + steps*lure.addPerStep;
+    detailCard.innerHTML = `
+      <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+      <img src="gear/${lure.img}" alt="">
+      <h3>${lure.key.replace(/[0-9]/g,'').replace(/^\\w/,c=>c.toUpperCase())}</h3>
+      <div class="desc">${lure.desc}</div>
+      <div class="detail-row"><label>Weight</label><span>${oz} oz</span></div>
+      <input type="range" class="spec-slider" min="${lure.baseOz}" max="${lure.maxOz}" step="${lure.stepOz}" value="${oz}" id="lureOzSlider">
+      <div class="detail-price">$${price.toFixed(2)} <span style="font-size:12px;color:#c9bda8;">/ pack</span></div>
+      <button class="detail-buy-btn" id="lurePurchaseBtn">Purchase</button>
+    `;
+    document.getElementById('lureOzSlider').addEventListener('input', e=>{ oz=parseFloat(e.target.value); render(); });
+    document.getElementById('lurePurchaseBtn').addEventListener('click', ()=>{
+      openQtyPrompt(lure, oz, price);
+    });
+  };
+  render();
+  detailOverlay.classList.add('show');
+}
+
+function openQtyPrompt(lure, oz, unitPrice){
+  let qty = 1;
+  const render = ()=>{
+    detailCard.innerHTML = `
+      <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+      <img src="gear/${lure.img}" alt="">
+      <h3>How many packs?</h3>
+      <div class="desc">${lure.desc} &middot; ${oz}oz &middot; $${unitPrice.toFixed(2)} each</div>
+      <div class="qty-row">
+        <button id="qtyMinus">−</button>
+        <span class="qty-val">${qty}</span>
+        <button id="qtyPlus">+</button>
+      </div>
+      <div class="detail-price">$${(unitPrice*qty).toFixed(2)}</div>
+      <button class="detail-buy-btn" id="qtyAddBtn">Add to Cart</button>
+    `;
+    document.getElementById('qtyMinus').addEventListener('click', ()=>{ qty=Math.max(1,qty-1); render(); });
+    document.getElementById('qtyPlus').addEventListener('click', ()=>{ qty=Math.min(20,qty+1); render(); });
+    document.getElementById('qtyAddBtn').addEventListener('click', ()=>{
+      addToCart({
+        gearType:'lure', itemKey:lure.key, label:`${lure.key} ${oz}oz x${qty}`, img:lure.img,
+        specValue:oz, lineType:null, price:unitPrice*qty, quantity:qty
+      });
+      closeDetail();
+    });
+  };
+  render();
+}
+
+// ======================= CART =======================
+function addToCart(entry){ cart.push(entry); updateCartBtn(); }
+function updateCartBtn(){
+  const btn = document.getElementById('cartBtn');
+  document.getElementById('cartCount').textContent = cart.length;
+  document.getElementById('cartTotal').textContent = cart.reduce((s,c)=>s+c.price,0).toFixed(2);
+  btn.classList.toggle('show', mode==='buy' && cart.length>0);
+}
+document.getElementById('cartBtn').addEventListener('click', openCart);
+document.getElementById('cartCloseBtn').addEventListener('click', ()=>document.getElementById('cartOverlay').classList.remove('show'));
+
+function openCart(){
+  renderCart();
+  document.getElementById('cartOverlay').classList.add('show');
+}
+function renderCart(){
+  const linesEl = document.getElementById('cartLines');
+  linesEl.innerHTML = '';
+  if(!cart.length){ linesEl.innerHTML = '<div class="empty-msg">Cart is empty.</div>'; }
+  cart.forEach((c,i)=>{
+    const row = document.createElement('div');
+    row.className = 'cart-line';
+    row.innerHTML = `<div class="ci">${c.label}</div><div class="cp">$${c.price.toFixed(2)}</div><button data-i="${i}">×</button>`;
+    row.querySelector('button').addEventListener('click', ()=>{ cart.splice(i,1); updateCartBtn(); renderCart(); });
+    linesEl.appendChild(row);
+  });
+  const total = cart.reduce((s,c)=>s+c.price,0);
+  document.getElementById('cartSheetTotal').textContent = '$'+total.toFixed(2);
+  document.getElementById('cartMsg').textContent = '';
+}
+
+document.getElementById('checkoutBtn').addEventListener('click', async ()=>{
+  const msgEl = document.getElementById('cartMsg');
+  if(!cart.length){ msgEl.style.color='var(--bad)'; msgEl.textContent='Cart is empty.'; return; }
+  if(!currentUser){ msgEl.style.color='var(--bad)'; msgEl.textContent='Sign in on the main game first to check out.'; return; }
+  const total = cart.reduce((s,c)=>s+c.price,0);
+  if(total > walletBalance){ msgEl.style.color='var(--bad)'; msgEl.textContent="You don't have enough in your wallet for this."; return; }
+
+  const rows = cart.map(c=>({
+    player_id: currentUser.id, gear_type:c.gearType, item_key:c.itemKey,
+    spec_value:c.specValue, purchase_price:c.price, quantity:c.quantity
+  }));
+  const { error } = await supabaseClient.from('FOFO Player Gear').insert(rows);
+  if(error){ msgEl.style.color='var(--bad)'; msgEl.textContent='Checkout failed — try again.'; console.error(error.message); return; }
+
+  walletBalance -= total;
+  await saveWallet(currentUser.id);
+  updateWalletUI();
+  cart = [];
+  updateCartBtn();
+  renderCart();
+  msgEl.style.color='var(--ok)'; msgEl.textContent='Purchase complete!';
+});
+
+// ======================= SELL =======================
+function renderSell(){
+  let filtered = [];
+  if(category==='rods_reels') filtered = ownedGear.filter(g=>g.gear_type==='rod'||g.gear_type==='reel');
+  else if(category==='lines') filtered = ownedGear.filter(g=>g.gear_type==='mono_line'||g.gear_type==='braid_line');
+  else if(category==='lures') filtered = ownedGear.filter(g=>g.gear_type==='lure');
+
+  if(!filtered.length){ contentEl.innerHTML = '<div class="empty-msg">Nothing owned in this category yet.</div>'; return; }
+
+  let html = '<div class="section-title">Your Gear</div><div class="card-grid" id="sellGrid"></div>';
+  contentEl.innerHTML = html;
+  const grid = document.getElementById('sellGrid');
+  filtered.forEach(g=>{
+    const cat = catalogLookup(g.gear_type, g.item_key);
+    const img = cat ? cat.img : '';
+    const sellPrice = (g.purchase_price/(g.quantity||1))*0.5;
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.innerHTML = `<img src="gear/${img}" alt=""><div class="name">${g.gear_type.replace('_',' ')} ${g.spec_value?('('+g.spec_value+(g.gear_type==='rod'?'ft':g.gear_type==='lure'?'oz':'lb')+')'):''}${g.quantity>1?' x'+g.quantity:''}</div><div class="price">sell $${sellPrice.toFixed(2)}${g.quantity>1?' ea':''}</div>`;
+    card.addEventListener('click', ()=>openSellDetail(g, cat, sellPrice));
+    grid.appendChild(card);
+  });
+}
+
+function openSellDetail(g, cat, sellPricePerUnit){
+  let qty = 1;
+  const maxQty = g.quantity || 1;
+  const render = ()=>{
+    detailCard.innerHTML = `
+      <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+      <img src="gear/${cat?cat.img:''}" alt="">
+      <h3>${g.gear_type.replace('_',' ')}</h3>
+      <div class="desc">Originally paid $${Number(g.purchase_price).toFixed(2)} ${maxQty>1?('for '+maxQty):''} — sells for 50% of purchase price.</div>
+      ${maxQty>1 ? `<div class="qty-row"><button id="sellQtyMinus">−</button><span class="qty-val">${qty}</span><button id="sellQtyPlus">+</button></div>` : ''}
+      <div class="detail-price">$${(sellPricePerUnit*qty).toFixed(2)}</div>
+      <button class="detail-sell-btn" id="confirmSellBtn">Sell</button>
+    `;
+    if(maxQty>1){
+      document.getElementById('sellQtyMinus').addEventListener('click', ()=>{ qty=Math.max(1,qty-1); render(); });
+      document.getElementById('sellQtyPlus').addEventListener('click', ()=>{ qty=Math.min(maxQty,qty+1); render(); });
+    }
+    document.getElementById('confirmSellBtn').addEventListener('click', ()=>sellItem(g, qty, sellPricePerUnit));
+  };
+  render();
+  detailOverlay.classList.add('show');
+}
+
+async function sellItem(g, qty, sellPricePerUnit){
+  const proceeds = sellPricePerUnit*qty;
+  const remainingQty = (g.quantity||1) - qty;
+  try{
+    if(remainingQty > 0){
+      const { error } = await supabaseClient.from('FOFO Player Gear')
+        .update({ quantity: remainingQty, purchase_price: g.purchase_price - (g.purchase_price/(g.quantity||1))*qty })
+        .eq('id', g.id);
+      if(error) throw error;
+    } else {
+      const { error } = await supabaseClient.from('FOFO Player Gear').delete().eq('id', g.id);
+      if(error) throw error;
+    }
+    walletBalance += proceeds;
+    await saveWallet(currentUser.id);
+    updateWalletUI();
+    closeDetail();
+    loadOwnedGear();
+  }catch(err){
+    console.error('Sell failed:', err.message);
+    alert('Could not complete the sale — try again.');
+  }
+}
+
+// ======================= INIT =======================
+(async function init(){
+  if(!supabaseClient){ return; }
+  const user = await loadWallet();
+  currentUser = user;
+  supabaseClient.auth.onAuthStateChange(async (event, session)=>{
+    if(session && session.user){ currentUser = session.user; await loadWallet(); if(mode==='sell') loadOwnedGear(); }
+  });
+})();
+</script>
+</body>
+</html>
