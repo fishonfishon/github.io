@@ -468,11 +468,11 @@
         </select>
       </div>
       <div class="field">
-        <div class="field-label">Jig Sensitivity</div>
+        <div class="field-label">Reel Sensitivity</div>
         <div class="seg" id="sensSeg">
-          <button data-val="high">High</button>
-          <button data-val="medium" class="active">Med</button>
-          <button data-val="low">Low</button>
+          <button data-val="slow">Slow</button>
+          <button data-val="normal" class="active">Normal</button>
+          <button data-val="fast">Fast</button>
         </div>
       </div>
     </div>
@@ -620,8 +620,13 @@
   }
   window.addEventListener('resize', fitCanvas);
 
-  const POWER_FACTOR = { light:1.00, lm:1.00, medium:1.00, mh:1.00, heavy:1.00 };
-  const ACTION_FACTOR = { fast:1.00, moderate:0.85, slow:0.70 };
+  // Rod power: each level lighter than Moderate adds 5% cast distance, each
+  // level heavier removes 5% — power no longer affects reeling/landing risk
+  // at all now, that's rod action/line type/rod length/reel sensitivity's job.
+  const POWER_FACTOR = { light:1.10, lm:1.05, medium:1.00, mh:0.95, heavy:0.90 };
+  // Rod action: slow adds 5% cast distance; fast's bonus goes to reeling
+  // strength instead (see effectiveLineTest below), not casting.
+  const ACTION_FACTOR = { fast:1.00, moderate:1.00, slow:1.05 };
   const STRENGTHS = [10,20,30,40,50,75,100,150];
   const MONO_FACTOR  = [1.00,0.90,0.80,0.70,0.60,0.47,0.37,0.24];
   const BRAID_FACTOR = [1.15,1.09,1.03,0.97,0.91,0.81,0.72,0.55];
@@ -631,13 +636,17 @@
   const ANCHOR_FORCE = 90; // was 150 — real whips were landing well under that
   const MAX_DIST = 350; // ft, hard cast-distance cap
 
-  function lengthFactor(ft){ return 0.75 + (ft-6)/5*0.5; }
-  function lineFactor(type, lb){
-    const i = STRENGTHS.indexOf(lb);
-    return (type==='braid' ? BRAID_FACTOR : MONO_FACTOR)[i];
-  }
-  function lureFactorFor(power, oz){
-    const [lo,hi] = LURE_SWEET[power];
+  // Rod length: each foot adds 5% cast distance (relative to the 6ft minimum).
+  function lengthFactor(ft){ return 1 + (ft-6)*0.05; }
+  // Line type's cast contribution: braid adds 5% distance, mono adds none —
+  // replacing the old per-lb friction curve with this simpler flat rule.
+  function lineFactor(type){ return type==='braid' ? 1.05 : 1.00; }
+  function lureFactorFor(power, oz, lineStrengthLb){
+    const [loBase,hiBase] = LURE_SWEET[power];
+    // Heavier line test needs a heavier lure to hit its optimal distance —
+    // nudge the sweet spot up gently as line test climbs above a 10lb baseline.
+    const lineShift = 1 + Math.max(0, (lineStrengthLb-10))/1000;
+    const lo = loBase*lineShift, hi = hiBase*lineShift;
     if(oz>=lo && oz<=hi) return 1.0;
     if(oz<lo){ const d = lo-oz; return Math.max(0.55, 1 - d*0.5); }
     const d = oz-hi;
@@ -890,14 +899,16 @@
     muteSfxBtn.classList.toggle('muted', nowMuted);
   });
 
-  let rodLength=8, power='medium', action='fast', lineType='mono', lineStrength=10, lureOz=1, sensitivity='medium';
+  let rodLength=8, power='medium', action='fast', lineType='mono', lineStrength=10, lureOz=1, reelSensitivity='normal';
   window.fishOnCastControl.lineStrength = lineStrength;
   window.fishOnCastControl.lineType = lineType;
   window.fishOnCastControl.power = power;
-  window.fishOnCastControl.sensitivity = sensitivity;
+  window.fishOnCastControl.rodLength = rodLength;
+  window.fishOnCastControl.action = action;
+  window.fishOnCastControl.reelSensitivity = reelSensitivity;
 
   const lenSlider=document.getElementById('lenSlider'), lenVal=document.getElementById('lenVal');
-  lenSlider.addEventListener('input', ()=>{ rodLength=parseInt(lenSlider.value); lenVal.textContent=rodLength+' ft'; });
+  lenSlider.addEventListener('input', ()=>{ rodLength=parseInt(lenSlider.value); lenVal.textContent=rodLength+' ft'; window.fishOnCastControl.rodLength=rodLength; });
 
   function wireSeg(id, setter){
     document.getElementById(id).addEventListener('click', e=>{
@@ -907,9 +918,9 @@
     });
   }
   wireSeg('powerSeg', v=>{ power=v; window.fishOnCastControl.power=v; });
-  wireSeg('actionSeg', v=>action=v);
+  wireSeg('actionSeg', v=>{ action=v; window.fishOnCastControl.action=v; });
   wireSeg('lineTypeSeg', v=>{ lineType=v; window.fishOnCastControl.lineType=v; });
-  wireSeg('sensSeg', v=>{ sensitivity=v; window.fishOnCastControl.sensitivity=v; });
+  wireSeg('sensSeg', v=>{ reelSensitivity=v; window.fishOnCastControl.reelSensitivity=v; });
   document.getElementById('lineStrength').addEventListener('change', e=>{ lineStrength=parseInt(e.target.value); window.fishOnCastControl.lineStrength=lineStrength; });
   document.getElementById('lureWeight').addEventListener('change', e=>lureOz=parseFloat(e.target.value));
 
@@ -961,8 +972,8 @@
     const lenF = lengthFactor(rodLength);
     const powF = POWER_FACTOR[power];
     const actF = ACTION_FACTOR[action];
-    const lineF = lineFactor(lineType, lineStrength) * lineLureFrictionFactor(lineStrength, lureOz);
-    const lureF = lureFactorFor(power, lureOz);
+    const lineF = lineFactor(lineType);
+    const lureF = lureFactorFor(power, lureOz, lineStrength);
     const raw = MAX_DIST * forceF * lenF * powF * actF * lineF * lureF;
     const dist = Math.max(0, Math.min(MAX_DIST, raw));
 
@@ -971,7 +982,7 @@
       row('Swing force', p.toFixed(1)+' m/s²', 'x'+forceF.toFixed(2)) +
       row('Rod length', rodLength+' ft', 'x'+lenF.toFixed(2)) +
       row('Power × action', power+' / '+action, 'x'+(powF*actF).toFixed(2)) +
-      row('Line (type/friction)', lineType+' '+lineStrength+'lb', 'x'+lineF.toFixed(2)) +
+      row('Line type', lineType, 'x'+lineF.toFixed(2)) +
       row('Lure weight', lureOz+' oz', 'x'+lureF.toFixed(2)) +
       '<div class="total"><span>Distance</span><span>'+dist.toFixed(0)+' ft</span></div>';
 
@@ -1126,6 +1137,8 @@
     document.getElementById('reelStatus'),
     document.getElementById('reelBailBtn').closest('.rig-area'),
     document.getElementById('reelWheel').closest('.rig-area'),
+    document.getElementById('castControlsRow'),
+    document.getElementById('simPanel'),
     document.getElementById('iceboxWrap'),
     document.getElementById('marketBulletin'),
     document.getElementById('rDbgEvents').closest('.debug'),
@@ -1333,29 +1346,40 @@
   }
   setInterval(rollForPredatorAttack, 1000);
 
-  // Line test = outward pulling capacity, not a hard fish-weight cap. A fish up
-  // to 1x the rating is totally safe regardless of technique. Up to 3x is
-  // landable with skill (easing off while the fish runs). Beyond that, risk
-  // climbs fast even with good technique. Aggressive reeling specifically DURING
-  // an active run is what actually stresses the line — calm reeling stays safe
-  // even on a heavily over-matched fish.
+  // Line test = outward pulling capacity, not a hard fish-weight cap. A fish
+  // up to 1x the rating is totally safe regardless of technique. Beyond that,
+  // it's landable with skill (easing off while the fish runs) up to the cap.
+  // Aggressive reeling specifically DURING an active run is what actually
+  // stresses the line — calm reeling stays safe even on an over-matched fish.
   const AGGRESSIVE_REEL_THRESHOLD = 2.0; // ft/s
-  const ROD_POWER_CUSHION = { light:0.85, lm:0.92, medium:1.0, mh:1.08, heavy:1.15 };
-  // Braided line can land roughly 3x its rated strength, mono roughly 2x —
-  // both with +/-5% random variance so it's not a perfectly exploitable exact
-  // number. Rolled once at hookup and held for that whole fight.
+  // 100% line-test success: a line can land up to 2x its rating (e.g. 20lb
+  // line lands up to 40lb) with +/-10% random variance, rolled once at hookup
+  // and held for that whole fight. Mono and braid now share this same base —
+  // line TYPE's advantage comes through the reeling-strength bonus below
+  // instead of a different cap.
   function rollLandingCapMultiplier(){
-    const base = window.fishOnCastControl.lineType==='braid' ? 3 : 2;
-    return base * (0.95 + Math.random()*0.10);
+    return 2.0 * (0.90 + Math.random()*0.20);
+  }
+  // Reeling strength: rod power no longer factors in here at all (power is
+  // now purely a casting-distance stat) — this is built entirely from rod
+  // length, line type, rod action, and reel sensitivity, each contributing a
+  // flat percentage on top of the line's raw rating.
+  const ROD_ACTION_REEL_BONUS = { fast:0.05, moderate:0, slow:0 };
+  const LINE_TYPE_REEL_BONUS = { mono:0, braid:0.05 };
+  const REEL_SENS_STRENGTH_BONUS = { slow:0.50, normal:0, fast:-0.50 };
+  function effectiveLineTest(lineTestLb){
+    const rLen = window.fishOnCastControl.rodLength || 6;
+    const rType = window.fishOnCastControl.lineType || 'mono';
+    const rAction = window.fishOnCastControl.action || 'fast';
+    const rSens = window.fishOnCastControl.reelSensitivity || 'normal';
+    const lengthBonus = (rLen-6)*0.01; // 1% per foot
+    const total = lengthBonus + (LINE_TYPE_REEL_BONUS[rType]||0) + (ROD_ACTION_REEL_BONUS[rAction]||0) + (REEL_SENS_STRENGTH_BONUS[rSens]||0);
+    return lineTestLb * Math.max(0.1, 1+total);
   }
   function lineOverRatio(lineTestLb, fishWeightLb, capMultiplier){
     const cap = capMultiplier || rollLandingCapMultiplier();
-    // A heavier rod has more backbone and absorbs shock loading better,
-    // effectively cushioning the line a little; a lighter/whippier rod
-    // gives less support and effectively reduces your safe margin.
-    const powerCushion = ROD_POWER_CUSHION[window.fishOnCastControl.power] || 1.0;
-    const effectiveLineTest = lineTestLb * powerCushion;
-    return Math.max(0, (fishWeightLb - effectiveLineTest) / (effectiveLineTest*(cap-1))); // 0 at 1x, 1 at the cap, keeps climbing beyond
+    const effLine = effectiveLineTest(lineTestLb);
+    return Math.max(0, (fishWeightLb - effLine) / (effLine*(cap-1))); // 0 at 1x, 1 at the cap, keeps climbing beyond
   }
 
   function hookFish(species, weight){
@@ -2167,6 +2191,7 @@ window.loadUserCatches = async function loadUserCatches() {
   const dialRotor=document.getElementById('dialRotor');
   let wheelDragging=false, wheelLastAngle=null, wheelLastTs=null, wheelRotationRad=0;
   const RETRIEVE_FT_PER_RAD = 3.0;
+  const REEL_SENS_SPEED_MULT = { slow:0.5, normal:1.0, fast:2.0 };
   function wheelAngle(e){
     const rect=wheel.getBoundingClientRect();
     const cx=rect.left+rect.width/2, cy=rect.top+rect.height/2;
@@ -2185,7 +2210,8 @@ window.loadUserCatches = async function loadUserCatches() {
     wheelRotationRad += d;
     dialRotor.style.transform = 'rotate('+wheelRotationRad+'rad)';
     if(d>0){
-      reelSpeedFtPerSec = Math.min(10, (d/dt)*RETRIEVE_FT_PER_RAD);
+      const speedMult = REEL_SENS_SPEED_MULT[window.fishOnCastControl.reelSensitivity||'normal'] || 1.0;
+      reelSpeedFtPerSec = Math.min(10*speedMult, (d/dt)*RETRIEVE_FT_PER_RAD*speedMult);
       window.fishOnSound.reelClick();
       window.fishOnSound.stopFishOnCue();
       if(bailOpen || freeFalling){ bailOpen=false; freeFalling=false; updateBailVisual(); setStatus('Reeling — bail auto-closed.',''); }
@@ -2196,9 +2222,12 @@ window.loadUserCatches = async function loadUserCatches() {
 
   // ---- jig via device motion ----
   let jigCooldown=false, jigPopping=false;
-  const JIG_THRESHOLD = { high:9, medium:15, low:22 };
+  // The jig trigger threshold used to be tied to a "Jig Sensitivity" control,
+  // which has been replaced by Reel Sensitivity (a reeling stat, not a jig
+  // one) — so this is now just a fixed constant matching the old "medium".
+  const JIG_TRIGGER_THRESHOLD = 15;
   function tryJig(mag){
-    const threshold = JIG_THRESHOLD[window.fishOnCastControl.sensitivity || 'medium'];
+    const threshold = JIG_TRIGGER_THRESHOLD;
     if(mag>threshold && !bailOpen && !jigCooldown){
       jigCooldown=true; setTimeout(()=>jigCooldown=false, 500);
       doJig(mag);
