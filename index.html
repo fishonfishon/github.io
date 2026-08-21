@@ -100,6 +100,19 @@
     border:5px solid #4a2f1a;
     box-shadow: 0 6px 16px rgba(0,0,0,0.45), inset 0 0 0 2px rgba(0,0,0,0.25);
   }
+  #gearShopSign{
+    display:block; position:relative; margin:0 0 14px; padding:12px;
+    background:
+      repeating-linear-gradient(90deg, #7a5230 0px, #6e4a2a 3px, #7a5230 6px),
+      linear-gradient(180deg, #8a5f38, #5e3d22);
+    border-radius:8px;
+    border:5px solid #4a2f1a;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.45), inset 0 0 0 2px rgba(0,0,0,0.25);
+    text-decoration:none; cursor:pointer;
+  }
+  #gearShopSign:active{ transform:scale(0.98); }
+  #gearShopSign .chalkboard{ padding:12px 10px 8px; }
+  #gearShopSign .chalk-title{ font-size:17px; }
   .wood-nail{
     position:absolute; top:10px; width:10px; height:10px; border-radius:50%;
     background: radial-gradient(circle at 35% 30%, #d8d8d8, #8a8a8a 60%, #4a4a4a);
@@ -399,74 +412,38 @@
     <p>Choose your set-up based on the type of saltwater fish you want like in real life. Then cast your lure by whipping your phone while holding the cast button. Casting distance is entirely dependant on how well your setup matches your whip. Once you have casted, you can either let your lure slowly sink to the bottom where you can start jigging by jigging your phone like a rod, or you can slowly reel in to simulate trolling, or you may do both! There is also a current that will affect the trajectory of your lure. Your caught fishes will be in your icebox on the bottom. Good luck!</p>
   </header>
 
-  <div class="panel">
+  <div class="panel" id="gearPanel">
+    <a href="shop.html" id="gearShopSign">
+      <div class="wood-nail left"></div>
+      <div class="wood-nail right"></div>
+      <div class="chalkboard">
+        <div class="chalk-title">🛒 FOFO Gear Shop</div>
+        <div class="chalk-subtitle">tap to browse &amp; buy</div>
+      </div>
+    </a>
     <div class="row">
       <div class="field">
-        <div class="field-label"><span>Rod length</span><span id="lenVal">8 ft</span></div>
-        <input type="range" id="lenSlider" min="6" max="11" step="1" value="8">
+        <div class="field-label">Rod</div>
+        <select id="rodSelect"><option value="">— none owned —</option></select>
       </div>
     </div>
     <div class="row">
       <div class="field">
-        <div class="field-label">Rod power</div>
-        <div class="seg" id="powerSeg">
-          <button data-val="light">L</button>
-          <button data-val="lm">LM</button>
-          <button data-val="medium" class="active">M</button>
-          <button data-val="mh">MH</button>
-          <button data-val="heavy">H</button>
-        </div>
+        <div class="field-label">Reel</div>
+        <select id="reelSelect"><option value="">— none owned —</option></select>
       </div>
     </div>
     <div class="row">
       <div class="field">
-        <div class="field-label">Rod action</div>
-        <div class="seg" id="actionSeg">
-          <button data-val="fast" class="active">Fast</button>
-          <button data-val="moderate">Moderate</button>
-          <button data-val="slow">Slow</button>
-        </div>
+        <div class="field-label">Line</div>
+        <select id="lineSelect"><option value="">— none owned —</option></select>
+      </div>
+      <div class="field">
+        <div class="field-label">Lure</div>
+        <select id="lureSelect"><option value="">— none owned —</option></select>
       </div>
     </div>
     <div class="row">
-      <div class="field">
-        <div class="field-label">Line type</div>
-        <div class="seg" id="lineTypeSeg">
-          <button data-val="mono" class="active">Mono</button>
-          <button data-val="braid">Braid</button>
-        </div>
-      </div>
-      <div class="field">
-        <div class="field-label">Line test</div>
-        <select id="lineStrength">
-          <option value="10">10 lb</option>
-          <option value="20">20 lb</option>
-          <option value="30">30 lb</option>
-          <option value="40">40 lb</option>
-          <option value="50">50 lb</option>
-          <option value="75">75 lb</option>
-          <option value="100">100 lb</option>
-          <option value="150">150 lb</option>
-        </select>
-      </div>
-    </div>
-    <div class="row">
-      <div class="field">
-        <div class="field-label">Lure weight</div>
-        <select id="lureWeight">
-          <option value="0.25">0.25 oz</option>
-          <option value="0.5">0.5 oz</option>
-          <option value="0.75">0.75 oz</option>
-          <option value="1" selected>1 oz</option>
-          <option value="1.5">1.5 oz</option>
-          <option value="2">2 oz</option>
-          <option value="2.5">2.5 oz</option>
-          <option value="3">3 oz</option>
-          <option value="4">4 oz</option>
-          <option value="5">5 oz</option>
-          <option value="7">7 oz</option>
-        </select>
-      </div>
       <div class="field">
         <div class="field-label">Reel Sensitivity</div>
         <div class="seg" id="sensSeg">
@@ -476,6 +453,7 @@
         </div>
       </div>
     </div>
+    <div id="noGearMsg" style="display:none;font-size:11.5px;color:#e0b23c;padding:8px 0 2px;">Starting you off with basic gear — visit the <a href="shop.html" style="color:var(--accent);">shop</a> anytime to buy better rods, reels, line, and lures.</div>
   </div>
 
   <canvas id="scene" width="520" height="260"></canvas>
@@ -569,7 +547,7 @@
         <div class="icebox-latch right"></div>
       </div>
       <div class="icebox-body">
-        <div id="walletRow">💰 Wallet: <span id="walletBalance">$0.00</span></div>
+        <div id="walletRow">💰 Wallet: <span id="walletBalance">$0.00</span> &nbsp;·&nbsp; <a href="shop.html" style="color:var(--accent);">🛒 Shop</a></div>
         <div class="icebox-list" id="iceboxRow"></div>
         <div id="iceboxEmpty">Nothing caught yet this session.</div>
       </div>
@@ -899,16 +877,15 @@
     muteSfxBtn.classList.toggle('muted', nowMuted);
   });
 
-  let rodLength=8, power='medium', action='fast', lineType='mono', lineStrength=10, lureOz=1, reelSensitivity='normal';
+  let rodLength=7, power='medium', action='moderate', lineType='mono', lineStrength=10, lureOz=0.25, reelSensitivity='normal';
+  let reelSpeedBonus=0; // from the purchased reel — stacks with, but is separate from, Reel Sensitivity
   window.fishOnCastControl.lineStrength = lineStrength;
   window.fishOnCastControl.lineType = lineType;
   window.fishOnCastControl.power = power;
   window.fishOnCastControl.rodLength = rodLength;
   window.fishOnCastControl.action = action;
   window.fishOnCastControl.reelSensitivity = reelSensitivity;
-
-  const lenSlider=document.getElementById('lenSlider'), lenVal=document.getElementById('lenVal');
-  lenSlider.addEventListener('input', ()=>{ rodLength=parseInt(lenSlider.value); lenVal.textContent=rodLength+' ft'; window.fishOnCastControl.rodLength=rodLength; });
+  window.fishOnCastControl.reelSpeedBonus = reelSpeedBonus;
 
   function wireSeg(id, setter){
     document.getElementById(id).addEventListener('click', e=>{
@@ -917,12 +894,137 @@
       b.classList.add('active'); setter(b.dataset.val);
     });
   }
-  wireSeg('powerSeg', v=>{ power=v; window.fishOnCastControl.power=v; });
-  wireSeg('actionSeg', v=>{ action=v; window.fishOnCastControl.action=v; });
-  wireSeg('lineTypeSeg', v=>{ lineType=v; window.fishOnCastControl.lineType=v; });
   wireSeg('sensSeg', v=>{ reelSensitivity=v; window.fishOnCastControl.reelSensitivity=v; });
-  document.getElementById('lineStrength').addEventListener('change', e=>{ lineStrength=parseInt(e.target.value); window.fishOnCastControl.lineStrength=lineStrength; });
-  document.getElementById('lureWeight').addEventListener('change', e=>lureOz=parseFloat(e.target.value));
+
+  // ---- Inventory-driven gear (rod/reel/line/lure come from the shop now) ----
+  const ROD_KEY_INFO = {
+    rodl:{power:'light',action:'slow'}, rodml:{power:'lm',action:'moderate'}, rodml2:{power:'lm',action:'fast'},
+    rodm:{power:'medium',action:'moderate'}, rodm2:{power:'medium',action:'fast'},
+    rodmh:{power:'mh',action:'moderate'}, rodmh2:{power:'mh',action:'fast'}, rodh:{power:'heavy',action:'fast'}
+  };
+  const REEL_KEY_INFO = { reelred:0.10, reelblueblack:0.15, reelbluesilver:0.20, reelgold:0.40 };
+  // Granted once to brand-new players so they're never stuck with nothing to
+  // play with before their first shop visit — a basic rod, reel, line, and a
+  // couple of the cheapest lures.
+  const STARTER_KIT = [
+    { gear_type:'rod', item_key:'rodm', spec_value:7, purchase_price:145, quantity:1 },
+    { gear_type:'reel', item_key:'reelred', spec_value:null, purchase_price:100, quantity:1 },
+    { gear_type:'mono_line', item_key:'lineyellow', spec_value:10, purchase_price:10, quantity:4 },
+    { gear_type:'lure', item_key:'hoochie1', spec_value:0.25, purchase_price:3, quantity:2 }
+  ];
+  let ownedRods=[], ownedReels=[], ownedLines=[], ownedLures=[];
+
+  function rodLabel(g){ const info=ROD_KEY_INFO[g.item_key]||{power:'?',action:'?'}; return info.power+'/'+info.action+' — '+g.spec_value+'ft'; }
+  function reelLabel(g){ const bonus=REEL_KEY_INFO[g.item_key]||0; return 'Reel (+'+Math.round(bonus*100)+'% speed)'; }
+  function lineLabel(g){ const color=g.item_key.replace('line',''); const type=g.gear_type==='braid_line'?'Braid':'Mono'; return color+' '+type+' '+g.spec_value+'lb'; }
+  function lureLabel(g){ return g.item_key+' '+g.spec_value+'oz'+(g.quantity>1?' (x'+g.quantity+')':''); }
+
+  function applyRodSelection(i){
+    const g=ownedRods[i]; if(!g) return;
+    const info = ROD_KEY_INFO[g.item_key]||{power:'medium',action:'fast'};
+    rodLength = g.spec_value; power = info.power; action = info.action;
+    window.fishOnCastControl.rodLength=rodLength;
+    window.fishOnCastControl.power=power;
+    window.fishOnCastControl.action=action;
+  }
+  function applyReelSelection(i){
+    const g=ownedReels[i];
+    reelSpeedBonus = g ? (REEL_KEY_INFO[g.item_key]||0) : 0;
+    window.fishOnCastControl.reelSpeedBonus = reelSpeedBonus;
+  }
+  function applyLineSelection(i){
+    const g=ownedLines[i]; if(!g) return;
+    lineType = g.gear_type==='braid_line' ? 'braid' : 'mono';
+    lineStrength = g.spec_value;
+    window.fishOnCastControl.lineType=lineType;
+    window.fishOnCastControl.lineStrength=lineStrength;
+    window.fishOnCastControl.equippedLineRow = g;
+  }
+  function applyLureSelection(i){
+    const g=ownedLures[i]; if(!g) return;
+    lureOz = g.spec_value;
+    window.fishOnCastControl.equippedLureRow = g;
+  }
+  document.getElementById('rodSelect').addEventListener('change', e=>applyRodSelection(parseInt(e.target.value)));
+  document.getElementById('reelSelect').addEventListener('change', e=>applyReelSelection(parseInt(e.target.value)));
+  document.getElementById('lineSelect').addEventListener('change', e=>applyLineSelection(parseInt(e.target.value)));
+  document.getElementById('lureSelect').addEventListener('change', e=>applyLureSelection(parseInt(e.target.value)));
+
+  function populateGearDropdowns(){
+    const rodSel=document.getElementById('rodSelect'), reelSel=document.getElementById('reelSelect');
+    const lineSel=document.getElementById('lineSelect'), lureSel=document.getElementById('lureSelect');
+
+    rodSel.innerHTML = ''; reelSel.innerHTML = ''; lineSel.innerHTML = ''; lureSel.innerHTML = '';
+    if(!ownedRods.length) rodSel.innerHTML = '<option value="">— none owned —</option>';
+    ownedRods.forEach((g,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=rodLabel(g); rodSel.appendChild(o); });
+    if(!ownedReels.length) reelSel.innerHTML = '<option value="">— none owned —</option>';
+    ownedReels.forEach((g,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=reelLabel(g); reelSel.appendChild(o); });
+    if(!ownedLines.length) lineSel.innerHTML = '<option value="">— none owned —</option>';
+    ownedLines.forEach((g,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=lineLabel(g); lineSel.appendChild(o); });
+    if(!ownedLures.length) lureSel.innerHTML = '<option value="">— none owned —</option>';
+    ownedLures.forEach((g,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=lureLabel(g); lureSel.appendChild(o); });
+
+    if(ownedRods.length){ rodSel.value=0; applyRodSelection(0); }
+    if(ownedReels.length){ reelSel.value=0; applyReelSelection(0); } else { applyReelSelection(-1); }
+    if(ownedLines.length){ lineSel.value=0; applyLineSelection(0); }
+    if(ownedLures.length){ lureSel.value=0; applyLureSelection(0); }
+  }
+
+  window.loadOwnedGearForCastPanel = async function(){
+    const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+    if(!client) return;
+    const { data:{session} } = await client.auth.getSession();
+    if(!session || !session.user) return;
+
+    let { data, error } = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
+    if(error){ console.error('Failed to load owned gear:', error.message); return; }
+
+    if(!data || data.length===0){
+      const rows = STARTER_KIT.map(k=>Object.assign({ player_id: session.user.id }, k));
+      const { error: insErr } = await client.from('FOFO Player Gear').insert(rows);
+      if(insErr){ console.error('Failed to grant starter kit:', insErr.message); }
+      else {
+        const noGearMsg = document.getElementById('noGearMsg');
+        if(noGearMsg) noGearMsg.style.display='block';
+        const retry = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
+        data = retry.data || [];
+      }
+    }
+
+    ownedRods = data.filter(g=>g.gear_type==='rod');
+    ownedReels = data.filter(g=>g.gear_type==='reel');
+    ownedLines = data.filter(g=>g.gear_type==='mono_line'||g.gear_type==='braid_line');
+    ownedLures = data.filter(g=>g.gear_type==='lure');
+    populateGearDropdowns();
+  };
+
+  // A line break costs the lure that was in use (gone entirely) and one of
+  // the line's 4 charges (25% each) — after 4 breaks, that spool is used up
+  // and needs replacing. Rods intentionally aren't touched here — no
+  // rod-breaking mechanic exists yet by design.
+  window.fishOnApplyGearDamage = async function(){
+    const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
+    const lureRow = window.fishOnCastControl.equippedLureRow;
+    const lineRow = window.fishOnCastControl.equippedLineRow;
+    let lineDestroyed = false;
+
+    if(lureRow){
+      const newQty = (lureRow.quantity||1) - 1;
+      try{
+        if(newQty > 0){ if(client) await client.from('FOFO Player Gear').update({quantity:newQty}).eq('id', lureRow.id); }
+        else { if(client) await client.from('FOFO Player Gear').delete().eq('id', lureRow.id); }
+      }catch(err){ console.error('Failed to update lure after break:', err); }
+    }
+    if(lineRow){
+      const newCharges = (lineRow.quantity||4) - 1;
+      try{
+        if(newCharges > 0){ if(client) await client.from('FOFO Player Gear').update({quantity:newCharges}).eq('id', lineRow.id); }
+        else { if(client) await client.from('FOFO Player Gear').delete().eq('id', lineRow.id); lineDestroyed = true; }
+      }catch(err){ console.error('Failed to update line after break:', err); }
+    }
+    if(window.loadOwnedGearForCastPanel) await window.loadOwnedGearForCastPanel();
+    if(lineDestroyed && window.fishOnSetStatus) window.fishOnSetStatus('That spool is completely used up from repeated breaks — pick a different line or head to the shop.', 'bad');
+  };
 
   const breakdownEl=document.getElementById('breakdown');
   const peakReadout=document.getElementById('peakReadout');
@@ -1655,6 +1757,7 @@
     window.fishOnSound.stopRunAlert();
     showCatchPopup(null, 'BROKEN LINE!', 'bad', 1600);
     setStatus(`Line snapped! That ${hookedFish.category} was too much for ${window.fishOnCastControl.lineStrength}lb test.`, 'bad');
+    if(window.fishOnApplyGearDamage) window.fishOnApplyGearDamage();
     clearInterval(fightHapticTimer);
     hookedFish=null; fishRunning=false;
     recastPending=true;
@@ -2210,7 +2313,9 @@ window.loadUserCatches = async function loadUserCatches() {
     wheelRotationRad += d;
     dialRotor.style.transform = 'rotate('+wheelRotationRad+'rad)';
     if(d>0){
-      const speedMult = REEL_SENS_SPEED_MULT[window.fishOnCastControl.reelSensitivity||'normal'] || 1.0;
+      const sensMult = REEL_SENS_SPEED_MULT[window.fishOnCastControl.reelSensitivity||'normal'] || 1.0;
+      const reelMult = 1 + (window.fishOnCastControl.reelSpeedBonus||0); // purchased reel — free speed, no strength trade-off
+      const speedMult = sensMult * reelMult;
       reelSpeedFtPerSec = Math.min(10*speedMult, (d/dt)*RETRIEVE_FT_PER_RAD*speedMult);
       window.fishOnSound.reelClick();
       window.fishOnSound.stopFishOnCue();
@@ -2898,6 +3003,9 @@ if(supabaseClient){
         if(typeof window.loadWallet === 'function') {
           window.loadWallet();
         }
+        if(typeof window.loadOwnedGearForCastPanel === 'function') {
+          window.loadOwnedGearForCastPanel();
+        }
       }
       await updateAccountUI(session);
     });
@@ -2910,6 +3018,9 @@ if(supabaseClient){
         }
         if(typeof window.loadWallet === 'function') {
           window.loadWallet();
+        }
+        if(typeof window.loadOwnedGearForCastPanel === 'function') {
+          window.loadOwnedGearForCastPanel();
         }
       }
       await updateAccountUI(data.session);
