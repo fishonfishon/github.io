@@ -190,6 +190,12 @@
   }
   #castBtn:active{ transform:translate(-50%,0) scale(0.95); }
   #castBtn.hidden-cast-btn{ opacity:0.25; pointer-events:none; }
+  #releaseFishBtn{
+    width:56px; height:56px; border-radius:50%; flex:0 0 auto;
+    background:var(--bad); color:#fff; font-weight:800; font-size:10px; letter-spacing:0.02em;
+    border:2px solid #16262e; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,0.3);
+  }
+  #releaseFishBtn:active{ transform:scale(0.95); }
   #reelWheel{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #384b48, #1a2422 70%);border:3px solid #47605c;position:relative;touch-action:none;}
   .manual-jig-btn{
     width:32px;height:32px;border-radius:50%;border:2px solid #16262e;
@@ -216,6 +222,10 @@
   .tension-dot.lit[data-level="3"]{ background:#e0c23c; border-color:#e0c23c; box-shadow:0 0 6px #e0c23c; }
   .tension-dot.lit[data-level="4"]{ background:#e88a3a; border-color:#e88a3a; box-shadow:0 0 7px #e88a3a; }
   .tension-dot.lit[data-level="5"]{ background:#d0453c; border-color:#d0453c; box-shadow:0 0 9px #d0453c; }
+  .tension-dot.lit[data-level="6"]{ background:#c22e24; border-color:#c22e24; box-shadow:0 0 10px #c22e24; }
+  .tension-dot.lit[data-level="7"]{ background:#a81f16; border-color:#a81f16; box-shadow:0 0 11px #a81f16; }
+  .tension-dot.lit[data-level="8"]{ background:#ff2a1a; border-color:#ff2a1a; box-shadow:0 0 14px #ff2a1a; animation:tensionPulse 0.45s ease-in-out infinite alternate; }
+  @keyframes tensionPulse{ from{ opacity:1; } to{ opacity:0.45; } }
   .tension-label{ font-size:8.5px; font-weight:700; letter-spacing:0.04em; color:#9fb0b0; text-align:center; line-height:1.3; }
 
   /* Fix 3: only the underwater side-profile view is shown; the top cast-flight canvas is hidden */
@@ -518,7 +528,6 @@
   </div>
 
   <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear and to cast hold down the cast button and flick your phone away from you like you would with a real fishing rod and then let go of the cast button!</div>
-  <button id="releaseFishBtn" class="btn-ghost" style="display:none;width:100%;margin-top:6px;">Release Fish</button>
 
   <div class="rig-area" id="bailRigArea">
     <div class="bail-stack">
@@ -531,11 +540,15 @@
       </button>
       <button id="castBtn" aria-label="Hold to cast">CAST</button>
     </div>
+    <button id="releaseFishBtn" aria-label="Release fish" style="display:none;">RELEASE</button>
   </div>
   <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
     <div id="reelWheel"><img id="wheelLogo" src="images/logo.png" alt="logo"><div class="dial-rotor" id="dialRotor"></div></div>
     <div id="tensionMeter">
       <div class="tension-dots">
+        <span class="tension-dot" data-level="8"></span>
+        <span class="tension-dot" data-level="7"></span>
+        <span class="tension-dot" data-level="6"></span>
         <span class="tension-dot" data-level="5"></span>
         <span class="tension-dot" data-level="4"></span>
         <span class="tension-dot" data-level="3"></span>
@@ -555,8 +568,6 @@
         <div class="icebox-latch right"></div>
       </div>
       <div class="icebox-body">
-        <!-- ADD THE BUTTON RIGHT HERE -->
-        <button id="loadCatchesBtn" onclick="loadUserCatches()" style="margin: 0 auto 10px auto; display: block; padding: 6px 12px; background: #203542; color: #fff; border: 1px solid #4a6fa5; border-radius: 4px; cursor: pointer; font-size: 13px;">🔄 Load Past Catches</button>
         <div id="walletRow">💰 Wallet: <span id="walletBalance">$0.00</span></div>
         <div class="icebox-list" id="iceboxRow"></div>
         <div id="iceboxEmpty">Nothing caught yet this session.</div>
@@ -1112,7 +1123,6 @@
     document.getElementById('reelScene'),
     reelScreen.querySelector('.readouts'),
     document.getElementById('reelStatus'),
-    document.getElementById('releaseFishBtn'),
     document.getElementById('reelBailBtn').closest('.rig-area'),
     document.getElementById('reelWheel').closest('.rig-area'),
     document.getElementById('iceboxWrap'),
@@ -1273,7 +1283,9 @@
   let fishRunning=false, fishRunUntil=0, fishRunDepthRate=0, lastRunHapticAt=0;
   let fishJumping=false, splashActive=false;
   let jumpCount=0, maxJumpsThisFight=4, lowSpeedSince=null, landingCapMultiplier=3;
-  let lineTension=0; // 0-1, smoothed — drives the 5-dot tension meter
+  const TENSION_DOTS = 8;
+  let lineTension=0; // 0-1, smoothed — drives the tension meter
+  let maxTensionTouches=0, wasAtMaxTension=false; // 3-strike system: breaks on the 3rd touch of max
 
   function rollForStrike(){
     if(!castActive || hookedFish || depthFt<=0) return;
@@ -1349,6 +1361,7 @@
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
     jumpCount=0; maxJumpsThisFight = 4 + Math.round(Math.random()); // 4 or 5
+    maxTensionTouches=0; wasAtMaxTension=false;
     lowSpeedSince=null;
     landingCapMultiplier = rollLandingCapMultiplier();
     // A strike always engages the bail, same as a real reel — otherwise the
@@ -1371,6 +1384,7 @@
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
     jumpCount=0; maxJumpsThisFight = 4 + Math.round(Math.random());
+    maxTensionTouches=0; wasAtMaxTension=false;
     lowSpeedSince=null;
     landingCapMultiplier = rollLandingCapMultiplier();
     bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
@@ -2055,7 +2069,7 @@ window.loadUserCatches = async function loadUserCatches() {
     bottomDepthFt=depthProfileFt(0); bailOpen=false; freeFalling=false; bottomed=false;
     lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null;
     fishJumping=false; splashActive=false;
-    lineTension=0; updateTensionMeter();
+    lineTension=0; maxTensionTouches=0; wasAtMaxTension=false; updateTensionMeter();
     transferInfo.textContent='Set your gear, then hold the bail to cast.';
     updateBailVisual(); updateReadouts(); drawScene();
     setStatus('Ready. Hold the bail button, wind up, and whip forward.', '');
@@ -2089,7 +2103,7 @@ window.loadUserCatches = async function loadUserCatches() {
   }
   const tensionDots = document.querySelectorAll('.tension-dot');
   function updateTensionMeter(){
-    const lit = Math.round(lineTension*5);
+    const lit = Math.round(lineTension*TENSION_DOTS);
     tensionDots.forEach(dot=>{
       dot.classList.toggle('lit', parseInt(dot.dataset.level,10)<=lit);
     });
@@ -2328,16 +2342,34 @@ window.loadUserCatches = async function loadUserCatches() {
         const lineTestLb = window.fishOnCastControl.lineStrength || 10;
         const overRatio = lineOverRatio(lineTestLb, hookedFish.weight, landingCapMultiplier);
         const isRisky = fishRunning && reelSpeedFtPerSec > AGGRESSIVE_REEL_THRESHOLD;
-        // A baseline reading shows even while calm, reflecting how mismatched
-        // the gear is; it spikes hard specifically when actually at risk
-        // (fish running + reeling aggressively), and relaxes back down once
-        // you ease off — matching what the meter is meant to teach.
-        const targetTension = Math.min(1, isRisky ? overRatio : overRatio*0.3);
+        // Two components: a baseline "there's a real fight happening" reading
+        // (so even a well-matched line shows a dot or two once the fish runs,
+        // not just when the gear is genuinely overmatched), plus the gear
+        // mismatch itself, which dominates and spikes hard specifically when
+        // actually at risk (fish running + reeling aggressively).
+        const fightIntensity = fishRunning ? 0.22 : (reelSpeedFtPerSec>0.05 ? 0.12 : 0.06);
+        const mismatchPart = isRisky ? overRatio : overRatio*0.35;
+        const targetTension = Math.max(1/TENSION_DOTS + 0.01, Math.min(1, fightIntensity + mismatchPart));
         const rate = isRisky ? 3.0 : 1.5; // rises fast, falls a bit slower — urgency
         lineTension += (targetTension-lineTension) * Math.min(1, rate*dt);
-        if(isRisky && overRatio > 0){
-          const snapChancePerSec = overRatio*overRatio*0.6;
-          if(Math.random() < snapChancePerSec*dt) breakLine();
+
+        // Three strikes: hitting max tension is survivable the first two
+        // times, breaks on the third. Only counts a fresh "touch" once
+        // tension has actually dropped back below max first.
+        const litNow = Math.round(lineTension*TENSION_DOTS);
+        if(litNow>=TENSION_DOTS && !wasAtMaxTension){
+          wasAtMaxTension = true;
+          maxTensionTouches++;
+          window.fishOnHapticFlash([80,60,80,60,150]);
+          if(maxTensionTouches>=3){
+            breakLine();
+          } else if(maxTensionTouches===2){
+            setStatus('YOUR LINE HIT MAX TENSION AGAIN! ONE MORE AND IT SNAPS!', 'bad');
+          } else {
+            setStatus('YOUR LINE IS ABOUT TO SNAP! EASE OFF!', 'bad');
+          }
+        } else if(litNow<TENSION_DOTS){
+          wasAtMaxTension = false;
         }
       } else {
         lineTension += (0-lineTension) * Math.min(1, 2*dt);
