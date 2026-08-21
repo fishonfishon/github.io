@@ -81,6 +81,11 @@
     display:none; align-items:center; justify-content:center; padding:16px;
   }
   #detailOverlay.show{ display:flex; }
+  #confirmOverlay{
+    position:fixed; inset:0; z-index:95; background:rgba(0,0,0,0.7);
+    display:none; align-items:center; justify-content:center; padding:16px;
+  }
+  #confirmOverlay.show{ display:flex; }
   .detail-card{
     width:100%; max-width:380px; background:#241a10; border:3px solid var(--wood);
     border-radius:14px; padding:20px; box-shadow:0 8px 30px rgba(0,0,0,0.6); position:relative;
@@ -160,6 +165,7 @@
     <button class="cat-btn" data-cat="rods_reels">Rods &amp; Reels</button>
     <button class="cat-btn" data-cat="lines">Lines</button>
     <button class="cat-btn" data-cat="lures">Lures</button>
+    <button class="cat-btn" data-cat="combo_sets">Combo Sets</button>
   </div>
 
   <div class="panel-card" id="starterPackBox" style="display:none;">
@@ -187,6 +193,15 @@
     <button id="checkoutBtn">Check Out</button>
     <button id="cartCloseBtn">Keep Shopping</button>
     <div id="cartMsg"></div>
+  </div>
+</div>
+
+<div id="confirmOverlay">
+  <div class="detail-card" style="text-align:center;">
+    <h3 style="margin-top:4px;">🎣 Thank You!</h3>
+    <div class="desc" id="confirmMsg">Your purchase is complete.</div>
+    <button class="detail-buy-btn" id="confirmBackToFishingBtn" style="margin-bottom:8px;">Back to Fishing!</button>
+    <button id="confirmKeepShoppingBtn" style="width:100%;padding:11px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--paper);cursor:pointer;">Keep Shopping</button>
   </div>
 </div>
 
@@ -322,34 +337,82 @@ async function starterPackAlreadyClaimed(){
   return !!data;
 }
 async function refreshStarterPackBox(){
+  const box = document.getElementById('starterPackBox');
   const priceEl = document.getElementById('starterPackPrice');
   const btn = document.getElementById('starterPackBtn');
   const msgEl = document.getElementById('starterPackMsg');
   msgEl.textContent = '';
-  if(!currentUser){ priceEl.textContent = 'Sign in on the main game first'; btn.disabled = true; return; }
+  if(!currentUser){ box.style.display='block'; priceEl.textContent = 'Sign in on the main game first'; btn.disabled = true; return; }
   const claimed = await starterPackAlreadyClaimed();
+  if(claimed){
+    // Once claimed, the free box goes away — it now lives in Combo Sets as a
+    // regular $200 purchase instead of a persistent standalone offer.
+    box.style.display='none';
+    return;
+  }
+  box.style.display='block';
   btn.disabled = false;
-  priceEl.textContent = claimed ? '$200' : 'FREE (one-time offer)';
-  btn.textContent = claimed ? 'Buy Starter Pack — $200' : 'Claim Free Starter Pack';
-  btn.dataset.claimed = claimed ? '1' : '0';
+  priceEl.textContent = 'FREE (one-time offer)';
+  btn.textContent = 'Claim Free Starter Pack';
+  btn.dataset.claimed = '0';
 }
-document.getElementById('starterPackBtn').addEventListener('click', async ()=>{
-  const msgEl = document.getElementById('starterPackMsg');
-  if(!currentUser){ msgEl.style.color='var(--bad)'; msgEl.textContent='Sign in first.'; return; }
-  const claimed = document.getElementById('starterPackBtn').dataset.claimed === '1';
+async function purchaseStarterPack(claimed, msgEl){
+  if(!currentUser){ msgEl.style.color='var(--bad)'; msgEl.textContent='Sign in first.'; return false; }
   const price = claimed ? 200 : 0;
-  if(price > walletBalance){ msgEl.style.color='var(--bad)'; msgEl.textContent="You don't have enough in your wallet."; return; }
+  if(price > walletBalance){ msgEl.style.color='var(--bad)'; msgEl.textContent="You don't have enough in your wallet."; return false; }
 
   const rows = starterPackItems(claimed).map(k=>Object.assign({ player_id: currentUser.id }, k));
   if(!claimed) rows.push(Object.assign({ player_id: currentUser.id, spec_value:null, purchase_price:0, quantity:1 }, STARTER_PACK_MARKER));
 
   const { error } = await supabaseClient.from('FOFO Player Gear').insert(rows);
-  if(error){ msgEl.style.color='var(--bad)'; msgEl.textContent='Something went wrong — try again.'; console.error(error.message); return; }
+  if(error){ msgEl.style.color='var(--bad)'; msgEl.textContent='Something went wrong — try again.'; console.error(error.message); return false; }
 
   if(price > 0){ walletBalance -= price; await saveWallet(currentUser.id); updateWalletUI(); }
   msgEl.style.color='var(--ok)'; msgEl.textContent = claimed ? 'Starter Pack purchased!' : 'Starter Pack claimed — good luck out there!';
-  refreshStarterPackBox();
+  return true;
+}
+document.getElementById('starterPackBtn').addEventListener('click', async ()=>{
+  const msgEl = document.getElementById('starterPackMsg');
+  const claimed = document.getElementById('starterPackBtn').dataset.claimed === '1';
+  const ok = await purchaseStarterPack(claimed, msgEl);
+  if(ok) refreshStarterPackBox();
 });
+
+async function renderComboSetsGrid(){
+  const grid = document.getElementById('comboGrid');
+  const emptyMsg = document.getElementById('comboEmptyMsg');
+  if(!currentUser){ grid.style.display='none'; emptyMsg.style.display='block'; emptyMsg.textContent='Sign in on the main game first.'; return; }
+  const claimed = await starterPackAlreadyClaimed();
+  if(!claimed){
+    grid.style.display='none'; emptyMsg.style.display='block';
+    emptyMsg.textContent = 'Claim your free Starter Pack above first — after that, it (and future combo sets) will show up here.';
+    return;
+  }
+  grid.style.display=''; emptyMsg.style.display='none';
+  grid.innerHTML='';
+  const card = document.createElement('div');
+  card.className = 'item-card';
+  card.innerHTML = `<img src="gear/rodl.png" alt=""><div class="name">Starter Pack</div><div class="price">$200</div>`;
+  card.addEventListener('click', openComboSetDetail);
+  grid.appendChild(card);
+}
+function openComboSetDetail(){
+  detailCard.innerHTML = `
+    <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+    <img src="gear/rodl.png" alt="">
+    <h3>Starter Pack</h3>
+    <div class="desc">The same professionally put-together bundle new anglers get for free: 6ft Light/Slow Rod, basic reel, 10lb mono line, 1x Jig Light pack (5x metal jigs).</div>
+    <div class="detail-price">$200.00</div>
+    <button class="detail-buy-btn" id="comboBuyBtn">Buy Combo Set</button>
+    <div id="comboMsg" style="font-size:11.5px;text-align:center;margin-top:6px;min-height:14px;"></div>
+  `;
+  document.getElementById('comboBuyBtn').addEventListener('click', async ()=>{
+    const msgEl = document.getElementById('comboMsg');
+    const ok = await purchaseStarterPack(true, msgEl);
+    if(ok) setTimeout(closeDetail, 900);
+  });
+  detailOverlay.classList.add('show');
+}
 
 function catalogLookup(gearType, key){
   if(gearType==='rod') return ROD_CATALOG.find(r=>r.key===key);
@@ -377,6 +440,8 @@ function renderBuy(){
   } else if(category==='lures'){
     html += '<div class="section-title">Individual Lures</div><div class="card-grid" id="lureIndivGrid"></div>';
     html += '<div class="section-title">Packaged Lures</div><div class="card-grid" id="luresPackGrid"></div>';
+  } else if(category==='combo_sets'){
+    html += '<div class="section-title">Combo Sets</div><div class="card-grid" id="comboGrid"></div><div class="empty-msg" id="comboEmptyMsg" style="display:none;"></div>';
   }
   contentEl.innerHTML = html;
 
@@ -389,6 +454,8 @@ function renderBuy(){
   } else if(category==='lures'){
     fillGrid('lureIndivGrid', LURE_CATALOG.filter(l=>l.category==='individual'), l=>`from $${l.basePrice}`, l=>openLureDetail(l));
     fillGrid('luresPackGrid', LURE_CATALOG.filter(l=>l.category==='packaged'), l=>`from $${l.basePrice}`, l=>openLureDetail(l));
+  } else if(category==='combo_sets'){
+    renderComboSetsGrid();
   }
 }
 
@@ -591,10 +658,18 @@ document.getElementById('checkoutBtn').addEventListener('click', async ()=>{
   walletBalance -= total;
   await saveWallet(currentUser.id);
   updateWalletUI();
+  document.getElementById('confirmMsg').textContent = `Thanks for shopping with us! ${cart.length} item${cart.length>1?'s':''} for $${total.toFixed(2)} ${cart.length>1?'are':'is'} on their way to your gear locker.`;
   cart = [];
   updateCartBtn();
   renderCart();
-  msgEl.style.color='var(--ok)'; msgEl.textContent='Purchase complete!';
+  document.getElementById('cartOverlay').classList.remove('show');
+  document.getElementById('confirmOverlay').classList.add('show');
+});
+document.getElementById('confirmKeepShoppingBtn').addEventListener('click', ()=>{
+  document.getElementById('confirmOverlay').classList.remove('show');
+});
+document.getElementById('confirmBackToFishingBtn').addEventListener('click', ()=>{
+  window.location.href = 'index.html';
 });
 
 // ======================= SELL =======================
