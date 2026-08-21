@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>FOFO Fishing Stop | Gear Shop</title>
+<title>FOFO Gear Shop</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="icon" type="image/png" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,6 +32,13 @@
     padding:8px 16px; font-weight:800; font-size:15px; box-shadow:0 3px 10px rgba(0,0,0,0.4);
   }
   #walletBox span{color:var(--ok);}
+
+  #leaveShopBtn{
+    display:inline-block; margin-bottom:14px; padding:8px 14px; border-radius:9px;
+    border:1px solid var(--line); background:rgba(255,255,255,0.06); color:var(--paper);
+    font-size:12.5px; font-weight:700; text-decoration:none;
+  }
+  #leaveShopBtn:active{ background:rgba(255,255,255,0.12); }
 
   .panel-card{
     background:rgba(20,16,12,0.82); border:2px solid var(--wood); border-radius:12px;
@@ -135,9 +142,11 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>🎣 FOFO Fishing Stop</h1>
+    <h1>🎣 FOFO Gear Shop</h1>
     <div id="walletBox">💰 Wallet: <span id="walletBalance">$0.00</span></div>
   </header>
+
+  <a href="index.html" id="leaveShopBtn">← Leave Shop</a>
 
   <div class="big-btn-row">
     <button class="big-btn" id="buyModeBtn">BUY GEAR</button>
@@ -409,7 +418,7 @@ function openLineDetail(colorKey){
       addToCart({
         gearType: type==='mono'?'mono_line':'braid_line', itemKey:colorKey,
         label:`${colorKey.replace('line','')} ${type} ${lb}lb`, img:cat.img,
-        specValue:lb, lineType:type, price, quantity:1
+        specValue:lb, lineType:type, price, quantity:4 // 4 charges = 25% durability lost per line break
       });
       closeDetail();
     });
@@ -541,28 +550,33 @@ function renderSell(){
     const cat = catalogLookup(g.gear_type, g.item_key);
     const img = cat ? cat.img : '';
     const sellPrice = (g.purchase_price/(g.quantity||1))*0.5;
+    const isLine = g.gear_type==='mono_line'||g.gear_type==='braid_line';
+    const qtyLabel = isLine ? (g.quantity+'/4 uses left') : (g.quantity>1 ? ('x'+g.quantity) : '');
     const card = document.createElement('div');
     card.className = 'item-card';
-    card.innerHTML = `<img src="gear/${img}" alt=""><div class="name">${g.gear_type.replace('_',' ')} ${g.spec_value?('('+g.spec_value+(g.gear_type==='rod'?'ft':g.gear_type==='lure'?'oz':'lb')+')'):''}${g.quantity>1?' x'+g.quantity:''}</div><div class="price">sell $${sellPrice.toFixed(2)}${g.quantity>1?' ea':''}</div>`;
+    card.innerHTML = `<img src="gear/${img}" alt=""><div class="name">${g.gear_type.replace('_',' ')} ${g.spec_value?('('+g.spec_value+(g.gear_type==='rod'?'ft':g.gear_type==='lure'?'oz':'lb')+')'):''}${qtyLabel?' '+qtyLabel:''}</div><div class="price">sell $${sellPrice.toFixed(2)}${g.quantity>1 && !isLine?' ea':''}</div>`;
     card.addEventListener('click', ()=>openSellDetail(g, cat, sellPrice));
     grid.appendChild(card);
   });
 }
 
 function openSellDetail(g, cat, sellPricePerUnit){
-  let qty = 1;
+  const isLine = g.gear_type==='mono_line'||g.gear_type==='braid_line';
+  let qty = isLine ? (g.quantity||1) : 1; // lines sell as a whole remaining spool, not partial charges
   const maxQty = g.quantity || 1;
   const render = ()=>{
     detailCard.innerHTML = `
       <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
       <img src="gear/${cat?cat.img:''}" alt="">
       <h3>${g.gear_type.replace('_',' ')}</h3>
-      <div class="desc">Originally paid $${Number(g.purchase_price).toFixed(2)} ${maxQty>1?('for '+maxQty):''} — sells for 50% of purchase price.</div>
-      ${maxQty>1 ? `<div class="qty-row"><button id="sellQtyMinus">−</button><span class="qty-val">${qty}</span><button id="sellQtyPlus">+</button></div>` : ''}
+      <div class="desc">${isLine
+        ? `Originally paid $${Number(g.purchase_price).toFixed(2)} for a full spool (${g.quantity}/4 uses left) — sells for 50% of its remaining value.`
+        : `Originally paid $${Number(g.purchase_price).toFixed(2)} ${maxQty>1?('for '+maxQty):''} — sells for 50% of purchase price.`}</div>
+      ${(!isLine && maxQty>1) ? `<div class="qty-row"><button id="sellQtyMinus">−</button><span class="qty-val">${qty}</span><button id="sellQtyPlus">+</button></div>` : ''}
       <div class="detail-price">$${(sellPricePerUnit*qty).toFixed(2)}</div>
       <button class="detail-sell-btn" id="confirmSellBtn">Sell</button>
     `;
-    if(maxQty>1){
+    if(!isLine && maxQty>1){
       document.getElementById('sellQtyMinus').addEventListener('click', ()=>{ qty=Math.max(1,qty-1); render(); });
       document.getElementById('sellQtyPlus').addEventListener('click', ()=>{ qty=Math.min(maxQty,qty+1); render(); });
     }
