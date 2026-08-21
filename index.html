@@ -205,6 +205,19 @@
   }
   #reelWheel .dial-rotor::after{content:'';position:absolute;top:8px;left:50%;width:4px;height:20px;background:var(--accent);transform:translateX(-50%);border-radius:2px;}
 
+  #tensionMeter{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .tension-dots{ display:flex; flex-direction:column; gap:5px; }
+  .tension-dot{
+    width:12px; height:12px; border-radius:50%; background:#2a3634;
+    border:1.5px solid #47605c; transition:background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .tension-dot.lit[data-level="1"]{ background:#5fcf6e; border-color:#5fcf6e; box-shadow:0 0 6px #5fcf6e; }
+  .tension-dot.lit[data-level="2"]{ background:#a8cf4a; border-color:#a8cf4a; box-shadow:0 0 6px #a8cf4a; }
+  .tension-dot.lit[data-level="3"]{ background:#e0c23c; border-color:#e0c23c; box-shadow:0 0 6px #e0c23c; }
+  .tension-dot.lit[data-level="4"]{ background:#e88a3a; border-color:#e88a3a; box-shadow:0 0 7px #e88a3a; }
+  .tension-dot.lit[data-level="5"]{ background:#d0453c; border-color:#d0453c; box-shadow:0 0 9px #d0453c; }
+  .tension-label{ font-size:8.5px; font-weight:700; letter-spacing:0.04em; color:#9fb0b0; text-align:center; line-height:1.3; }
+
   /* Fix 3: only the underwater side-profile view is shown; the top cast-flight canvas is hidden */
   #scene, .meter-row { display:none; }
 
@@ -521,6 +534,16 @@
   </div>
   <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
     <div id="reelWheel"><img id="wheelLogo" src="images/logo.png" alt="logo"><div class="dial-rotor" id="dialRotor"></div></div>
+    <div id="tensionMeter">
+      <div class="tension-dots">
+        <span class="tension-dot" data-level="5"></span>
+        <span class="tension-dot" data-level="4"></span>
+        <span class="tension-dot" data-level="3"></span>
+        <span class="tension-dot" data-level="2"></span>
+        <span class="tension-dot" data-level="1"></span>
+      </div>
+      <div class="tension-label">LINE<br>TENSION</div>
+    </div>
   </div>
 
 <div class="icebox-wrap" id="iceboxWrap">
@@ -858,6 +881,7 @@
   let rodLength=8, power='medium', action='fast', lineType='mono', lineStrength=10, lureOz=1, sensitivity='medium';
   window.fishOnCastControl.lineStrength = lineStrength;
   window.fishOnCastControl.lineType = lineType;
+  window.fishOnCastControl.power = power;
   window.fishOnCastControl.sensitivity = sensitivity;
 
   const lenSlider=document.getElementById('lenSlider'), lenVal=document.getElementById('lenVal');
@@ -870,7 +894,7 @@
       b.classList.add('active'); setter(b.dataset.val);
     });
   }
-  wireSeg('powerSeg', v=>power=v);
+  wireSeg('powerSeg', v=>{ power=v; window.fishOnCastControl.power=v; });
   wireSeg('actionSeg', v=>action=v);
   wireSeg('lineTypeSeg', v=>{ lineType=v; window.fishOnCastControl.lineType=v; });
   wireSeg('sensSeg', v=>{ sensitivity=v; window.fishOnCastControl.sensitivity=v; });
@@ -1249,6 +1273,7 @@
   let fishRunning=false, fishRunUntil=0, fishRunDepthRate=0, lastRunHapticAt=0;
   let fishJumping=false, splashActive=false;
   let jumpCount=0, maxJumpsThisFight=4, lowSpeedSince=null, landingCapMultiplier=3;
+  let lineTension=0; // 0-1, smoothed — drives the 5-dot tension meter
 
   function rollForStrike(){
     if(!castActive || hookedFish || depthFt<=0) return;
@@ -1302,6 +1327,7 @@
   // an active run is what actually stresses the line — calm reeling stays safe
   // even on a heavily over-matched fish.
   const AGGRESSIVE_REEL_THRESHOLD = 2.0; // ft/s
+  const ROD_POWER_CUSHION = { light:0.85, lm:0.92, medium:1.0, mh:1.08, heavy:1.15 };
   // Braided line can land roughly 3x its rated strength, mono roughly 2x —
   // both with +/-5% random variance so it's not a perfectly exploitable exact
   // number. Rolled once at hookup and held for that whole fight.
@@ -1311,7 +1337,12 @@
   }
   function lineOverRatio(lineTestLb, fishWeightLb, capMultiplier){
     const cap = capMultiplier || rollLandingCapMultiplier();
-    return Math.max(0, (fishWeightLb - lineTestLb) / (lineTestLb*(cap-1))); // 0 at 1x, 1 at the cap, keeps climbing beyond
+    // A heavier rod has more backbone and absorbs shock loading better,
+    // effectively cushioning the line a little; a lighter/whippier rod
+    // gives less support and effectively reduces your safe margin.
+    const powerCushion = ROD_POWER_CUSHION[window.fishOnCastControl.power] || 1.0;
+    const effectiveLineTest = lineTestLb * powerCushion;
+    return Math.max(0, (fishWeightLb - effectiveLineTest) / (effectiveLineTest*(cap-1))); // 0 at 1x, 1 at the cap, keeps climbing beyond
   }
 
   function hookFish(species, weight){
@@ -2024,6 +2055,7 @@ window.loadUserCatches = async function loadUserCatches() {
     bottomDepthFt=depthProfileFt(0); bailOpen=false; freeFalling=false; bottomed=false;
     lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null;
     fishJumping=false; splashActive=false;
+    lineTension=0; updateTensionMeter();
     transferInfo.textContent='Set your gear, then hold the bail to cast.';
     updateBailVisual(); updateReadouts(); drawScene();
     setStatus('Ready. Hold the bail button, wind up, and whip forward.', '');
@@ -2054,6 +2086,13 @@ window.loadUserCatches = async function loadUserCatches() {
     // cast is active, all interaction moves to the arc/bail button instead.
     castBtn.classList.toggle('hidden-cast-btn', castActive);
     bailBtn.style.pointerEvents = castActive ? 'auto' : 'none';
+  }
+  const tensionDots = document.querySelectorAll('.tension-dot');
+  function updateTensionMeter(){
+    const lit = Math.round(lineTension*5);
+    tensionDots.forEach(dot=>{
+      dot.classList.toggle('lit', parseInt(dot.dataset.level,10)<=lit);
+    });
   }
   let castHoldPointer=false;
   castBtn.addEventListener('pointerdown', e=>{
@@ -2285,14 +2324,25 @@ window.loadUserCatches = async function loadUserCatches() {
         }
       }
 
-      if(hookedFish && fishRunning && reelSpeedFtPerSec > AGGRESSIVE_REEL_THRESHOLD){
+      if(hookedFish){
         const lineTestLb = window.fishOnCastControl.lineStrength || 10;
         const overRatio = lineOverRatio(lineTestLb, hookedFish.weight, landingCapMultiplier);
-        if(overRatio > 0){
+        const isRisky = fishRunning && reelSpeedFtPerSec > AGGRESSIVE_REEL_THRESHOLD;
+        // A baseline reading shows even while calm, reflecting how mismatched
+        // the gear is; it spikes hard specifically when actually at risk
+        // (fish running + reeling aggressively), and relaxes back down once
+        // you ease off — matching what the meter is meant to teach.
+        const targetTension = Math.min(1, isRisky ? overRatio : overRatio*0.3);
+        const rate = isRisky ? 3.0 : 1.5; // rises fast, falls a bit slower — urgency
+        lineTension += (targetTension-lineTension) * Math.min(1, rate*dt);
+        if(isRisky && overRatio > 0){
           const snapChancePerSec = overRatio*overRatio*0.6;
           if(Math.random() < snapChancePerSec*dt) breakLine();
         }
+      } else {
+        lineTension += (0-lineTension) * Math.min(1, 2*dt);
       }
+      updateTensionMeter();
 
       if(distanceFt<16 && !recastPending){
         recastPending=true;
