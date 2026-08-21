@@ -453,7 +453,7 @@
         </div>
       </div>
     </div>
-    <div id="noGearMsg" style="display:none;font-size:11.5px;color:#e0b23c;padding:8px 0 2px;">Starting you off with basic gear — visit the <a href="shop.html" style="color:var(--accent);">shop</a> anytime to buy better rods, reels, line, and lures.</div>
+    <div id="noGearMsg" style="display:none;font-size:11.5px;color:#e0b23c;padding:8px 0 2px;">You don't own any gear yet — visit the <a href="shop.html" style="color:var(--accent);">shop</a> and grab the free Starter Pack under Buy Gear to get going.</div>
   </div>
 
   <canvas id="scene" width="520" height="260"></canvas>
@@ -903,17 +903,6 @@
     rodmh:{power:'mh',action:'moderate'}, rodmh2:{power:'mh',action:'fast'}, rodh:{power:'heavy',action:'fast'}
   };
   const REEL_KEY_INFO = { reelbasic:0, reelred:0.10, reelblueblack:0.15, reelbluesilver:0.20, reelgold:0.40 };
-  // Granted once to brand-new players so they're never stuck with nothing to
-  // play with before their first shop visit — the most basic possible rod,
-  // reel, line, and lure. purchase_price is 0 for all of these specifically
-  // so the shop can identify them as free starter gear and refuse to sell
-  // them back (see shop.html's sell logic).
-  const STARTER_KIT = [
-    { gear_type:'rod', item_key:'rodl', spec_value:6, purchase_price:0, quantity:1 },
-    { gear_type:'reel', item_key:'reelbasic', spec_value:null, purchase_price:0, quantity:1 },
-    { gear_type:'mono_line', item_key:'lineyellow', spec_value:10, purchase_price:0, quantity:4 },
-    { gear_type:'lure', item_key:'jiglight', spec_value:0.75, purchase_price:0, quantity:1 }
-  ];
   let ownedRods=[], ownedReels=[], ownedLines=[], ownedLures=[];
 
   function rodLabel(g){ const info=ROD_KEY_INFO[g.item_key]||{power:'?',action:'?'}; return info.power+'/'+info.action+' — '+g.spec_value+'ft'; }
@@ -974,9 +963,8 @@
 
   let gearLoadPromise = null;
   window.loadOwnedGearForCastPanel = function(){
-    // If a load is already in flight, share it instead of starting a second
-    // independent check-then-insert — that race is exactly what let two
-    // separate calls both see "zero gear" and both grant a starter kit.
+    // Shares one in-flight load instead of letting concurrent calls (which
+    // happen on page load) each run their own independent fetch.
     if(gearLoadPromise) return gearLoadPromise;
     gearLoadPromise = (async ()=>{
       const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
@@ -984,25 +972,15 @@
       const { data:{session} } = await client.auth.getSession();
       if(!session || !session.user) return;
 
-      let { data, error } = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
+      const { data, error } = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
       if(error){ console.error('Failed to load owned gear:', error.message); return; }
 
-      if(!data || data.length===0){
-        const rows = STARTER_KIT.map(k=>Object.assign({ player_id: session.user.id }, k));
-        const { error: insErr } = await client.from('FOFO Player Gear').insert(rows);
-        if(insErr){ console.error('Failed to grant starter kit:', insErr.message); }
-        else {
-          const noGearMsg = document.getElementById('noGearMsg');
-          if(noGearMsg) noGearMsg.style.display='block';
-          const retry = await client.from('FOFO Player Gear').select('*').eq('player_id', session.user.id).eq('is_broken', false);
-          data = retry.data || [];
-        }
-      }
-
-      ownedRods = data.filter(g=>g.gear_type==='rod');
-      ownedReels = data.filter(g=>g.gear_type==='reel');
-      ownedLines = data.filter(g=>g.gear_type==='mono_line'||g.gear_type==='braid_line');
-      ownedLures = data.filter(g=>g.gear_type==='lure');
+      ownedRods = (data||[]).filter(g=>g.gear_type==='rod');
+      ownedReels = (data||[]).filter(g=>g.gear_type==='reel');
+      ownedLines = (data||[]).filter(g=>g.gear_type==='mono_line'||g.gear_type==='braid_line');
+      ownedLures = (data||[]).filter(g=>g.gear_type==='lure');
+      const noGearMsg = document.getElementById('noGearMsg');
+      if(noGearMsg) noGearMsg.style.display = (data && data.length) ? 'none' : 'block';
       populateGearDropdowns();
     })();
     gearLoadPromise.finally(()=>{ gearLoadPromise = null; });
