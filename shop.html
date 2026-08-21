@@ -28,27 +28,27 @@
   header{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 16px;flex-wrap:wrap;gap:10px;}
   header h1{font-family:'Kalam',cursive;font-size:26px;margin:0;text-shadow:0 2px 6px rgba(0,0,0,0.6);}
   #walletBox{
-    background:rgba(20,15,10,0.75); border:2px solid var(--wood); border-radius:10px;
+    background:rgba(20,15,10,0.825); border:2px solid var(--wood); border-radius:10px;
     padding:8px 16px; font-weight:800; font-size:15px; box-shadow:0 3px 10px rgba(0,0,0,0.4);
   }
   #walletBox span{color:var(--ok);}
 
   #leaveShopBtn{
     display:inline-block; margin-bottom:14px; padding:8px 14px; border-radius:9px;
-    border:1px solid var(--line); background:rgba(255,255,255,0.06); color:var(--paper);
+    border:1px solid var(--line); background:rgba(255,255,255,0.342); color:var(--paper);
     font-size:12.5px; font-weight:700; text-decoration:none;
   }
-  #leaveShopBtn:active{ background:rgba(255,255,255,0.12); }
+  #leaveShopBtn:active{ background:rgba(255,255,255,0.384); }
 
   .panel-card{
-    background:rgba(20,16,12,0.82); border:2px solid var(--wood); border-radius:12px;
+    background:rgba(20,16,12,0.874); border:2px solid var(--wood); border-radius:12px;
     padding:16px; margin-bottom:16px; box-shadow:0 4px 16px rgba(0,0,0,0.4);
   }
 
   .big-btn-row{display:flex; gap:14px; margin-bottom:16px;}
   .big-btn{
     flex:1; padding:22px 10px; border-radius:12px; border:2px solid var(--wood);
-    background:rgba(20,16,12,0.82); color:var(--paper); font-family:'Kalam',cursive;
+    background:rgba(20,16,12,0.874); color:var(--paper); font-family:'Kalam',cursive;
     font-size:20px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.4);
   }
   .big-btn.active{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
@@ -57,7 +57,7 @@
   .cat-btn-row{display:flex; gap:10px; margin-bottom:16px;}
   .cat-btn{
     flex:1; padding:12px 6px; border-radius:9px; border:1px solid var(--line);
-    background:rgba(255,255,255,0.06); color:var(--paper); font-size:13px; font-weight:700; cursor:pointer;
+    background:rgba(255,255,255,0.342); color:var(--paper); font-size:13px; font-weight:700; cursor:pointer;
   }
   .cat-btn.active{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
 
@@ -65,10 +65,10 @@
 
   .card-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:14px;}
   .item-card{
-    background:rgba(255,255,255,0.06); border:1px solid var(--line); border-radius:10px;
+    background:rgba(255,255,255,0.342); border:1px solid var(--line); border-radius:10px;
     padding:10px 8px; cursor:pointer; text-align:center;
   }
-  .item-card:active{ background:rgba(255,255,255,0.12); }
+  .item-card:active{ background:rgba(255,255,255,0.384); }
   .item-card img{width:100%; height:64px; object-fit:contain; margin-bottom:6px;}
   .item-card .name{font-size:11.5px; font-weight:700; line-height:1.25;}
   .item-card .price{font-size:11px; color:var(--ok); margin-top:3px;}
@@ -92,7 +92,7 @@
   .spec-slider{width:100%; margin:6px 0 4px;}
   .toggle-row{display:flex; gap:8px; margin-bottom:12px;}
   .toggle-row button{
-    flex:1; padding:9px; border-radius:8px; border:1px solid var(--line); background:rgba(255,255,255,0.06);
+    flex:1; padding:9px; border-radius:8px; border:1px solid var(--line); background:rgba(255,255,255,0.342);
     color:var(--paper); font-size:12.5px; font-weight:700; cursor:pointer;
   }
   .toggle-row button.active{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
@@ -106,7 +106,7 @@
     color:#fff; font-weight:800; font-size:14px; cursor:pointer;
   }
   .qty-row{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px;}
-  .qty-row button{width:36px; height:36px; border-radius:50%; border:1px solid var(--line); background:rgba(255,255,255,0.08); color:var(--paper); font-size:18px; cursor:pointer;}
+  .qty-row button{width:36px; height:36px; border-radius:50%; border:1px solid var(--line); background:rgba(255,255,255,0.356); color:var(--paper); font-size:18px; cursor:pointer;}
   .qty-row .qty-val{font-size:18px; font-weight:800; min-width:30px; text-align:center;}
 
   #cartBtn{
@@ -157,6 +157,14 @@
     <button class="cat-btn" data-cat="rods_reels">Rods &amp; Reels</button>
     <button class="cat-btn" data-cat="lines">Lines</button>
     <button class="cat-btn" data-cat="lures">Lures</button>
+  </div>
+
+  <div class="panel-card" id="starterPackBox" style="display:none;">
+    <div class="section-title">🎁 Starter Pack</div>
+    <div class="desc" style="font-size:12px;color:#c9bda8;margin-bottom:10px;">6ft Light/Slow Rod, basic reel (no speed booster), 10lb mono line, 1x Jig Light pack (5x metal jigs)</div>
+    <div class="detail-price" id="starterPackPrice">—</div>
+    <button class="detail-buy-btn" id="starterPackBtn">Claim</button>
+    <div id="starterPackMsg" style="font-size:11.5px;text-align:center;margin-top:6px;min-height:14px;"></div>
   </div>
 
   <div id="content"></div>
@@ -270,6 +278,8 @@ function setMode(m){
   document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
   contentEl.innerHTML = '<div class="empty-msg">Choose a category above.</div>';
   updateCartBtn();
+  document.getElementById('starterPackBox').style.display = m==='buy' ? 'block' : 'none';
+  if(m==='buy') refreshStarterPackBox();
   if(m==='sell') loadOwnedGear();
 }
 function setCategory(c){
@@ -287,6 +297,56 @@ async function loadOwnedGear(){
   else ownedGear = data || [];
   render();
 }
+
+// ======================= STARTER PACK =======================
+// A one-time free bundle, $200 if claimed again later. Whether it's been
+// claimed before is tracked via a lightweight marker row (gear_type
+// 'starter_pack', item_key 'claim_marker') rather than a new table column.
+const STARTER_PACK_MARKER = { gear_type:'starter_pack', item_key:'claim_marker' };
+function starterPackItems(paid){
+  return [
+    { gear_type:'rod', item_key:'rodl', spec_value:6, purchase_price: paid?125:0, quantity:1 },
+    { gear_type:'reel', item_key:'reelbasic', spec_value:null, purchase_price:0, quantity:1 }, // always unsellable — no real market value
+    { gear_type:'mono_line', item_key:'lineyellow', spec_value:10, purchase_price: paid?10:0, quantity:4 },
+    { gear_type:'lure', item_key:'jiglight', spec_value:0.75, purchase_price: paid?30:0, quantity:1 }
+  ];
+}
+async function starterPackAlreadyClaimed(){
+  if(!supabaseClient || !currentUser) return null; // null = unknown (not signed in)
+  const { data } = await supabaseClient.from('FOFO Player Gear').select('id')
+    .eq('player_id', currentUser.id).eq('gear_type', STARTER_PACK_MARKER.gear_type)
+    .eq('item_key', STARTER_PACK_MARKER.item_key).maybeSingle();
+  return !!data;
+}
+async function refreshStarterPackBox(){
+  const priceEl = document.getElementById('starterPackPrice');
+  const btn = document.getElementById('starterPackBtn');
+  const msgEl = document.getElementById('starterPackMsg');
+  msgEl.textContent = '';
+  if(!currentUser){ priceEl.textContent = 'Sign in on the main game first'; btn.disabled = true; return; }
+  const claimed = await starterPackAlreadyClaimed();
+  btn.disabled = false;
+  priceEl.textContent = claimed ? '$200' : 'FREE (one-time offer)';
+  btn.textContent = claimed ? 'Buy Starter Pack — $200' : 'Claim Free Starter Pack';
+  btn.dataset.claimed = claimed ? '1' : '0';
+}
+document.getElementById('starterPackBtn').addEventListener('click', async ()=>{
+  const msgEl = document.getElementById('starterPackMsg');
+  if(!currentUser){ msgEl.style.color='var(--bad)'; msgEl.textContent='Sign in first.'; return; }
+  const claimed = document.getElementById('starterPackBtn').dataset.claimed === '1';
+  const price = claimed ? 200 : 0;
+  if(price > walletBalance){ msgEl.style.color='var(--bad)'; msgEl.textContent="You don't have enough in your wallet."; return; }
+
+  const rows = starterPackItems(claimed).map(k=>Object.assign({ player_id: currentUser.id }, k));
+  if(!claimed) rows.push(Object.assign({ player_id: currentUser.id, spec_value:null, purchase_price:0, quantity:1 }, STARTER_PACK_MARKER));
+
+  const { error } = await supabaseClient.from('FOFO Player Gear').insert(rows);
+  if(error){ msgEl.style.color='var(--bad)'; msgEl.textContent='Something went wrong — try again.'; console.error(error.message); return; }
+
+  if(price > 0){ walletBalance -= price; await saveWallet(currentUser.id); updateWalletUI(); }
+  msgEl.style.color='var(--ok)'; msgEl.textContent = claimed ? 'Starter Pack purchased!' : 'Starter Pack claimed — good luck out there!';
+  refreshStarterPackBox();
+});
 
 function catalogLookup(gearType, key){
   if(gearType==='rod') return ROD_CATALOG.find(r=>r.key===key);
