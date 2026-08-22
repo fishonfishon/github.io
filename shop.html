@@ -220,15 +220,18 @@
     <button id="authCloseBtn" aria-label="Close">×</button>
     <h2 id="authTitle">Sign In</h2>
     <button class="oauth-btn" id="googleSignInBtn">Continue with Google</button>
-    <div class="auth-divider">or</div>
+    <div class="auth-divider" id="authDivider">or</div>
     <input type="email" id="authEmail" placeholder="Email" autocomplete="email">
     <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+    <input type="password" id="authPassword2" placeholder="Confirm new password" autocomplete="new-password" style="display:none;">
+    <div class="auth-toggle" id="authForgotRow"><a href="#" id="authForgotLink">Forgot password?</a></div>
     <div id="authError"></div>
     <button id="authSubmitBtn" class="btn-ok" style="width:100%;">Sign In</button>
-    <div class="auth-toggle">
+    <div class="auth-toggle" id="authToggleRow">
       <span id="authToggleText">Don't have an account?</span>
       <a href="#" id="authToggleLink">Sign Up</a>
     </div>
+    <div class="auth-toggle" id="authBackRow" style="display:none;"><a href="#" id="authBackLink" style="margin-left:0;">← Back to Sign In</a></div>
   </div>
 </div>
 
@@ -370,23 +373,69 @@ const authModal = document.getElementById('authModal');
 const authTitle = document.getElementById('authTitle');
 const authEmail = document.getElementById('authEmail');
 const authPassword = document.getElementById('authPassword');
+const authPassword2 = document.getElementById('authPassword2');
 const authError = document.getElementById('authError');
 const authSubmitBtn = document.getElementById('authSubmitBtn');
 const googleSignInBtn = document.getElementById('googleSignInBtn');
+const authDivider = document.getElementById('authDivider');
 const authToggleText = document.getElementById('authToggleText');
 const authToggleLink = document.getElementById('authToggleLink');
+const authToggleRow = document.getElementById('authToggleRow');
+const authForgotRow = document.getElementById('authForgotRow');
+const authForgotLink = document.getElementById('authForgotLink');
+const authBackRow = document.getElementById('authBackRow');
+const authBackLink = document.getElementById('authBackLink');
 
+// Four modes share this one modal: 'signin'/'signup' (the original two),
+// 'reset' (just an email field — sends the recovery link), and 'recovery'
+// (landed here FROM that emailed link — set a new password). Supabase fires
+// a PASSWORD_RECOVERY auth event to put us in 'recovery' automatically;
+// 'reset' is only ever entered by the player clicking "Forgot password?".
 let authMode = 'signin';
 function setAuthMode(m){
   authMode = m;
-  authTitle.textContent = m==='signin' ? 'Sign In' : 'Create Account';
-  authSubmitBtn.textContent = m==='signin' ? 'Sign In' : 'Sign Up';
-  authToggleText.textContent = m==='signin' ? "Don't have an account?" : 'Already have an account?';
-  authToggleLink.textContent = m==='signin' ? 'Sign Up' : 'Sign In';
   authError.textContent='';
+  authPassword2.value='';
+  if(m==='signin' || m==='signup'){
+    authTitle.textContent = m==='signin' ? 'Sign In' : 'Create Account';
+    authSubmitBtn.textContent = m==='signin' ? 'Sign In' : 'Sign Up';
+    authToggleText.textContent = m==='signin' ? "Don't have an account?" : 'Already have an account?';
+    authToggleLink.textContent = m==='signin' ? 'Sign Up' : 'Sign In';
+    googleSignInBtn.style.display='';
+    authDivider.style.display='';
+    authPassword.style.display='';
+    authPassword.placeholder='Password';
+    authPassword.autocomplete = m==='signin' ? 'current-password' : 'new-password';
+    authPassword2.style.display='none';
+    authForgotRow.style.display = m==='signin' ? '' : 'none';
+    authToggleRow.style.display='';
+    authBackRow.style.display='none';
+  } else if(m==='reset'){
+    authTitle.textContent = 'Reset Password';
+    authSubmitBtn.textContent = 'Send Reset Link';
+    googleSignInBtn.style.display='none';
+    authDivider.style.display='none';
+    authPassword.style.display='none';
+    authPassword2.style.display='none';
+    authForgotRow.style.display='none';
+    authToggleRow.style.display='none';
+    authBackRow.style.display='';
+  } else if(m==='recovery'){
+    authTitle.textContent = 'Choose a New Password';
+    authSubmitBtn.textContent = 'Update Password';
+    googleSignInBtn.style.display='none';
+    authDivider.style.display='none';
+    authPassword.style.display='';
+    authPassword.placeholder='New password';
+    authPassword.autocomplete='new-password';
+    authPassword2.style.display='';
+    authForgotRow.style.display='none';
+    authToggleRow.style.display='none';
+    authBackRow.style.display='none'; // already authenticated via the emailed link — no "back to sign in" needed
+  }
 }
 function showAuthModal(){ if(authModal) authModal.classList.add('show'); }
-function hideAuthModal(){ if(authModal){ authModal.classList.remove('show'); authError.textContent=''; authEmail.value=''; authPassword.value=''; } }
+function hideAuthModal(){ if(authModal){ authModal.classList.remove('show'); authError.textContent=''; authEmail.value=''; authPassword.value=''; authPassword2.value=''; } }
 
 async function setUsername(desiredUsername){
   const { data: { session } } = await supabaseClient.auth.getSession();
@@ -476,23 +525,46 @@ if(authModal) authModal.addEventListener('click', e=>{ if(e.target===authModal) 
 if(authToggleLink){
   authToggleLink.addEventListener('click', e=>{ e.preventDefault(); setAuthMode(authMode==='signin' ? 'signup' : 'signin'); });
 }
+if(authForgotLink){
+  authForgotLink.addEventListener('click', e=>{ e.preventDefault(); setAuthMode('reset'); });
+}
+if(authBackLink){
+  authBackLink.addEventListener('click', e=>{ e.preventDefault(); setAuthMode('signin'); });
+}
 if(authSubmitBtn){
   authSubmitBtn.addEventListener('click', async ()=>{
     if(!supabaseClient) return;
-    const email = authEmail.value.trim();
-    const password = authPassword.value;
     authError.style.color = 'var(--bad)';
-    if(!email || !password){ authError.textContent='Enter an email and password.'; return; }
     authSubmitBtn.disabled = true;
     try{
       if(authMode==='signin'){
+        const email = authEmail.value.trim(), password = authPassword.value;
+        if(!email || !password){ authError.textContent='Enter an email and password.'; authSubmitBtn.disabled=false; return; }
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if(error) throw error;
         hideAuthModal();
-      } else {
+      } else if(authMode==='signup'){
+        const email = authEmail.value.trim(), password = authPassword.value;
+        if(!email || !password){ authError.textContent='Enter an email and password.'; authSubmitBtn.disabled=false; return; }
         const { error } = await supabaseClient.auth.signUp({ email, password });
         if(error) throw error;
         hideAuthModal();
+      } else if(authMode==='reset'){
+        const email = authEmail.value.trim();
+        if(!email){ authError.textContent='Enter your account email.'; authSubmitBtn.disabled=false; return; }
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+        if(error) throw error;
+        authError.style.color='var(--ok)';
+        authError.textContent='Check your email for a password reset link.';
+      } else if(authMode==='recovery'){
+        const password = authPassword.value, password2 = authPassword2.value;
+        if(!password || password.length<6){ authError.textContent='Password must be at least 6 characters.'; authSubmitBtn.disabled=false; return; }
+        if(password!==password2){ authError.textContent="Passwords don't match."; authSubmitBtn.disabled=false; return; }
+        const { error } = await supabaseClient.auth.updateUser({ password });
+        if(error) throw error;
+        authError.style.color='var(--ok)';
+        authError.textContent='Password updated — you\'re signed in.';
+        setTimeout(hideAuthModal, 1500);
       }
     }catch(err){
       authError.style.color = 'var(--bad)';
@@ -1118,6 +1190,16 @@ async function sellItem(g, qty, sellPricePerUnit){
   currentUser = user;
   await updateAccountUI(user ? { user } : null);
   supabaseClient.auth.onAuthStateChange(async (event, session)=>{
+    // Landed here from the "reset your password" email — Supabase already
+    // logged them into a temporary recovery session and fires this once.
+    // Show the "choose a new password" form instead of dropping them into
+    // the shop, and skip the normal sign-in bootstrap below for now.
+    if(event === 'PASSWORD_RECOVERY'){
+      setAuthMode('recovery');
+      showAuthModal();
+      if(session && session.user){ currentUser = session.user; await updateAccountUI(session); }
+      return;
+    }
     if(session && session.user){
       currentUser = session.user;
       await loadWallet();
