@@ -233,6 +233,10 @@
     width:49px; height:49px; border-radius:50%; z-index:2;
     background:var(--accent); color:#1a1210; font-weight:800; font-size:10px; letter-spacing:0.02em;
     border:2px solid #16262e; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,0.3);
+    /* It's just a tap now (no more holding through the whole windup+whip),
+       but keep these as a safety net against the phone's native long-press
+       text-selection/callout UI ever grabbing a touch on this button. */
+    -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; touch-action:manipulation;
   }
   #castBtn:active{ transform:translate(-50%,0) scale(0.95); }
   #castBtn.hidden-cast-btn{ opacity:0.25; pointer-events:none; }
@@ -518,7 +522,7 @@
   </div>
 
   <footer>
-    Hold the bail button below, wind up, whip forward, and release — however hard you were swinging at the moment you let go is what the cast uses. No timing window, no penalty for releasing late.
+    Tap the CAST button below, then wind up and whip your phone forward — you have 5 seconds. The release is detected automatically from the burst of acceleration compared to the windup, so there's no need to keep holding anything down. If it doesn't catch your release, tap CAST again to release manually.
   </footer>
   <div id="legalFooter">
     © 2026 Fish On! Fish On! — Mobile Cast and Reel Engine · <a href="privacy.html">Privacy Policy</a> · <a href="tos.html">Terms of Service</a>
@@ -533,7 +537,7 @@
   </header>
 
   <div class="transfer-badge">
-    <span id="rTransferInfo">Set your gear, then hold the bail to cast.</span>
+    <span id="rTransferInfo">Set your gear, then tap CAST to begin.</span>
   </div>
 
   <canvas id="reelScene" width="520" height="400"></canvas>
@@ -546,7 +550,7 @@
   </div>
 
   <div class="status-wrap" id="reelStatusWrap">
-    <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear and to cast hold down the cast button and flick your phone away from you like you would with a real fishing rod and then let go of the cast button!</div>
+    <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear, then tap CAST and whip your phone forward like a real fishing rod within 5 seconds — the release is detected automatically.</div>
     <button id="tutorialCloseBtn" aria-label="Turn off tutorial hints" title="Turn off tutorial hints">×</button>
   </div>
 
@@ -559,7 +563,7 @@
           <text x="70" y="35" fill="#c7d0d0" font-size="11" text-anchor="middle" id="reelBailLabel"></text>
         </svg>
       </button>
-      <button id="castBtn" aria-label="Hold to cast">CAST</button>
+      <button id="castBtn" aria-label="Tap to start cast">CAST</button>
     </div>
     <button id="releaseFishBtn" aria-label="Release fish" style="display:none;">RELEASE</button>
   </div>
@@ -1116,41 +1120,90 @@
   const goReelBtn=document.getElementById('goReelBtn');
 
   let casting=false; // true while a cast (or its flight animation) is resolving
-  let armed=false;   // true while the bail is held and we're tracking peak force
+  let armed=false;   // true during the 5s cast window while we're watching for a release
   let peak=0;
   let recentSamples=[]; // {t, mag} — trailing window so a load-up spike ages out before release
   const RELEASE_WINDOW_MS = 400;
   let lure={x:0.06,y:0,flying:false,dur:0,from:0.06,to:0.06,_start:null};
   let lastCastDistance=null;
 
+  // ---- Tap-to-arm, auto-detected release ----
+  // Holding a button down for the whole windup-through-release motion turned
+  // out to fight the phone's own touch handling — the sustained press could
+  // trigger the browser's native text-selection/callout UI mid-swing, and a
+  // thumb sliding off the button during a hard whip could end the "hold"
+  // early by accident. Instead: one tap arms a CAST_WINDOW_MS window, and the
+  // release is detected from the motion stream itself — a real release is a
+  // sudden BURST_RATIO-times spike over the recent windup trend (emaMag), not
+  // just a big number (a hard windup alone can also read big). ARM_GRACE_MS
+  // ignores the brief jolt of the tap itself before burst-watching starts.
+  let armStartAt=0;
+  let emaMag=0;              // slow-moving average of |accel| while armed — the "windup trend"
+  let burstDetectedAt=null;  // timestamp the burst threshold was first crossed, else null
+  let castWindowTimer=null;  // fires if no release is detected within the window — cancels the arm
+  let burstConfirmTimer=null;// short delay after burst onset, so the true peak (often 1-2 samples later) is captured before locking in
+  const CAST_WINDOW_MS = 5000;
+  const ARM_GRACE_MS = 250;
+  const EMA_ALPHA = 0.12;
+  const BURST_RATIO = 1.7;
+  const BURST_ABS_FLOOR = ANCHOR_FORCE*0.22;
+  const BURST_CONFIRM_MS = 200;
+
   function handleAccelSample(mag){
     const pct=Math.max(0,Math.min(100,(mag/ANCHOR_FORCE)*100));
     meterFill.style.width=pct+'%';
-    if(armed){
-      const now=performance.now();
-      recentSamples.push({t:now, mag});
-      const cutoff=now-RELEASE_WINDOW_MS;
-      while(recentSamples.length && recentSamples[0].t<cutoff) recentSamples.shift();
-      peak=0; for(const s of recentSamples){ if(s.mag>peak) peak=s.mag; }
-      peakReadout.textContent=peak.toFixed(1)+' m/s²';
+    if(!armed) return;
+    const now=performance.now();
+    recentSamples.push({t:now, mag});
+    const cutoff=now-RELEASE_WINDOW_MS;
+    while(recentSamples.length && recentSamples[0].t<cutoff) recentSamples.shift();
+    peak=0; for(const s of recentSamples){ if(s.mag>peak) peak=s.mag; }
+    peakReadout.textContent=peak.toFixed(1)+' m/s²';
+
+    emaMag += (mag-emaMag)*EMA_ALPHA;
+    if(burstDetectedAt===null && now-armStartAt>ARM_GRACE_MS){
+      if(mag > emaMag*BURST_RATIO && mag > BURST_ABS_FLOOR){
+        burstDetectedAt = now;
+        clearTimeout(burstConfirmTimer);
+        burstConfirmTimer = setTimeout(()=> finalizeCast(), BURST_CONFIRM_MS);
+      }
     }
   }
 
-  // Hold the bail, whip the phone, release to cast. Peak force is measured only
-  // over the trailing ~400ms before release — so winding/loading up first (which
-  // often spikes harder than people expect) doesn't lock in the distance before
-  // the actual forward whip even happens. Whatever you did right before letting
-  // go is what counts.
   window.fishOnArmCast = function(){
     if(casting || window.fishOnIsCastActive()) return;
-    armed=true; peak=0; recentSamples=[];
+    armed=true; peak=0; recentSamples=[]; emaMag=0; burstDetectedAt=null;
+    armStartAt=performance.now();
     peakReadout.textContent='0.0 m/s²';
+    clearTimeout(castWindowTimer);
+    castWindowTimer = setTimeout(cancelCastWindow, CAST_WINDOW_MS);
   };
-  window.fishOnReleaseCast = function(){
+  // Locks in whatever peak has been captured so far and casts (if it clears
+  // the minimum) — called automatically once a release burst is confirmed,
+  // or on demand as a manual fallback (see fishOnForceReleaseCast below).
+  function finalizeCast(){
     if(!armed) return;
     armed=false;
+    clearTimeout(castWindowTimer); castWindowTimer=null;
+    clearTimeout(burstConfirmTimer); burstConfirmTimer=null;
+    window.fishOnCastControl.bailHeld=false;
     if(peak>4){ casting=true; doCast(peak); }
-  };
+    else if(window.fishOnCancelCastArm){ window.fishOnCancelCastArm(); }
+  }
+  // The 5s window ran out with no release detected — abandon the attempt
+  // rather than casting on a stale/near-zero peak.
+  function cancelCastWindow(){
+    if(!armed) return;
+    armed=false;
+    clearTimeout(burstConfirmTimer); burstConfirmTimer=null;
+    window.fishOnCastControl.bailHeld=false;
+    if(window.fishOnCancelCastArm) window.fishOnCancelCastArm();
+  }
+  // Manual safety valve: if automatic burst detection ever misses a genuine
+  // release (sensor noise, an unusually gentle swing), tapping CAST again
+  // mid-window finalizes immediately with whatever peak has been seen so far
+  // — same outcome as a detected burst, just player-triggered.
+  window.fishOnForceReleaseCast = function(){ finalizeCast(); };
 
   function doCast(p){
     window.fishOnSound.cast();
@@ -2406,7 +2459,7 @@ window.loadUserCatches = async function loadUserCatches() {
   function resetCast(){
     depthFt=0; bottomDepthFt=depthProfileFt(distanceFt);
     bailOpen=false; freeFalling=false; bottomed=false; reelSpeedFtPerSec=0; lockedLineFt=null;
-    setStatus(castActive ? 'Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.' : 'Bail closed. Hold the cast button and wind up to prepare a cast.', '');
+    setStatus(castActive ? 'Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.' : 'Bail closed. Tap CAST to prepare a cast.', '');
     updateReadouts(); drawScene();
     updateBailVisual();
   }
@@ -2423,9 +2476,9 @@ window.loadUserCatches = async function loadUserCatches() {
     lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null; justLandedFish=false;
     fishJumping=false; splashActive=false;
     lineTension=0; maxTensionTouches=0; wasAtMaxTension=false; maxTensionSustainedSec=0; sustainWarned=false; updateTensionMeter();
-    transferInfo.textContent='Set your gear, then hold the bail to cast.';
+    transferInfo.textContent='Set your gear, then tap CAST to begin.';
     updateBailVisual(); updateReadouts(); drawScene();
-    setStatus('Ready. Hold the bail button, wind up, and whip forward.', '');
+    setStatus('Ready. Tap CAST, then wind up and whip forward within 5 seconds.', '');
     window.fishOnTutorialEvent && window.fishOnTutorialEvent('cast_reset');
   }
 
@@ -2486,28 +2539,35 @@ window.loadUserCatches = async function loadUserCatches() {
       dot.classList.toggle('lit', parseInt(dot.dataset.level,10)<=lit);
     });
   }
-  let castHoldPointer=false;
+  // Tap CAST once to arm a 5-second cast window — no need to keep holding it
+  // down through the whole windup-and-whip. The casting script (a separate
+  // closure) watches the motion stream itself for the release: a sudden
+  // acceleration burst well above the recent windup trend, distinct from the
+  // windup's own buildup. It calls back in one of three ways: doCast() on a
+  // real cast (which itself calls startReelPhase(), handling all the visual
+  // cleanup below), or window.fishOnCancelCastArm() if the window times out
+  // with no clear release (peak too low, or nothing detected at all) — this
+  // is that cleanup. A second tap on CAST while already armed acts as a
+  // manual release fallback (fishOnForceReleaseCast) instead of re-arming.
+  window.fishOnCancelCastArm = function(){
+    if(castActive) return;
+    bailOpen=false;
+    updateBailVisual(); updateReadouts();
+    setStatus('No release detected in time — tap CAST to try again.', 'bad');
+  };
   castBtn.addEventListener('pointerdown', e=>{
     e.preventDefault();
     if(castActive) return;
-    try{ castBtn.setPointerCapture(e.pointerId); }catch(err){}
-    castHoldPointer=true; bailOpen=true;
+    if(window.fishOnCastControl.bailHeld){
+      window.fishOnForceReleaseCast && window.fishOnForceReleaseCast();
+      return;
+    }
+    bailOpen=true;
     window.fishOnCastControl.bailHeld=true;
     window.fishOnEnableCastMotion();
     window.fishOnArmCast();
-    setStatus('Bail held open. Wind up, then release to cast.', '');
-    // Failsafe: the iOS permission dialog triggered above can interrupt the touch
-    // sequence with a pointercancel instead of pointerup, which would otherwise
-    // leave the hold stuck forever and let a later jig misfire as a cast.
-    clearTimeout(window._fishOnHoldFailsafe);
-    window._fishOnHoldFailsafe = setTimeout(()=>{
-      if(window.fishOnCastControl.bailHeld){
-        window.fishOnCastControl.bailHeld=false;
-        castHoldPointer=false;
-        window.fishOnReleaseCast();
-        if(!castActive){ bailOpen=false; updateBailVisual(); updateReadouts(); }
-      }
-    }, 4000);
+    setStatus('Cast window open (5s) — wind up, then whip forward. Release is detected automatically, or tap CAST again to release manually.', '');
+    updateBailVisual(); updateReadouts();
   });
   bailBtn.addEventListener('pointerdown', e=>{
     e.preventDefault();
@@ -2524,21 +2584,6 @@ window.loadUserCatches = async function loadUserCatches() {
     updateBailVisual(); updateReadouts();
     window.fishOnTutorialEvent && window.fishOnTutorialEvent('bail_toggled');
   });
-  function endBailHold(){
-    if(!castHoldPointer) return;
-    castHoldPointer=false;
-    clearTimeout(window._fishOnHoldFailsafe);
-    window.fishOnCastControl.bailHeld=false;
-    window.fishOnReleaseCast();
-    setTimeout(()=>{
-      if(!castActive){
-        bailOpen=false; updateBailVisual(); updateReadouts();
-        setStatus('Bail closed. Hold the cast button and wind up to prepare a cast.', '');
-      }
-    }, 30);
-  }
-  window.addEventListener('pointerup', endBailHold);
-  window.addEventListener('pointercancel', endBailHold);
 
   // ---- reel wheel ----
   const wheel=document.getElementById('reelWheel');
@@ -3259,7 +3304,7 @@ window.loadUserCatches = async function loadUserCatches() {
     const result = await window.fishOnEnableCastMotion();
     if(result==='granted' || result==='already'){
       btn.textContent='Motion Enabled ✓'; btn.className='granted'; btn.disabled=true;
-      note.textContent='All set — hold the bail button below to cast.';
+      note.textContent='All set — tap CAST below to begin.';
       setTimeout(()=>bar.classList.remove('show'), 1800);
     } else if(result==='denied'){
       btn.textContent='Denied — Tap for Instructions'; btn.className='failed';
@@ -3746,7 +3791,7 @@ if(supabaseClient){
       text:"Nice catch! Open your Icebox below to see it and sell it for cash.",
       target:'#iceboxWrap' },
     { key:'cast', test:s=> !s.castActive,
-      text:"Hold the CAST button, whip your phone forward like a real cast, then let go!",
+      text:"Tap the CAST button, then wind up and whip your phone forward — you have 5 seconds and the release is detected automatically!",
       target:'#castBtn' },
     { key:'lure_landed', test:s=> s.castActive && s.bailOpen && s.freeFalling && !s.bottomed && !s.hookedFish,
       text:"Your lure's in the water and sinking. Close the bail any time (tap the arc) to start jigging — flick your phone up — or reel in slowly to troll it. Or let it keep sinking all the way to the bottom.",
