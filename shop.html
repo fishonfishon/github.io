@@ -891,30 +891,55 @@ const detailCard = document.getElementById('detailCard');
 function closeDetail(){ detailOverlay.classList.remove('show'); }
 detailOverlay.addEventListener('click', e=>{ if(e.target===detailOverlay) closeDetail(); });
 
+// Builds <option> tick marks for a spec slider's <datalist> — every step if
+// there aren't many, otherwise thinned to a readable count (always landing on
+// real steppable values, and always including the max endpoint) so a wide
+// range like a 100lb-span line spool doesn't render a solid smear of ticks.
+function buildTickOptions(min, max, step){
+  const totalSteps = Math.round((max-min)/step);
+  const maxTicks = 10;
+  const skip = Math.max(1, Math.ceil(totalSteps/maxTicks));
+  const opts=[];
+  for(let i=0;i<=totalSteps;i+=skip){
+    opts.push(+(min+i*step).toFixed(4));
+  }
+  if(opts[opts.length-1] !== max) opts.push(max);
+  return opts.map(v=>`<option value="${v}">`).join('');
+}
+
 function openRodDetail(rod){
   let ft = rod.baseFt;
-  const render = ()=>{
-    const price = rod.basePrice + (ft-rod.baseFt)*rod.addPerFt;
+  const priceFor = f => rod.basePrice + (f-rod.baseFt)*rod.addPerFt;
+  const renderFull = ()=>{
     detailCard.innerHTML = `
       <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
       <img src="gear/${rod.img}" alt="">
       <h3>${rod.desc}</h3>
       <div class="desc">Power: ${rod.power} &middot; Action: ${rod.action}</div>
-      <div class="detail-row"><label>Length</label><span>${ft} ft</span></div>
-      <input type="range" class="spec-slider" min="${rod.baseFt}" max="${rod.maxFt}" step="1" value="${ft}" id="rodFtSlider">
-      <div class="detail-price">$${price.toFixed(2)}</div>
+      <div class="detail-row"><label>Length</label><span id="rodFtLabel">${ft} ft</span></div>
+      <input type="range" class="spec-slider" min="${rod.baseFt}" max="${rod.maxFt}" step="1" value="${ft}" id="rodFtSlider" list="rodFtTicks">
+      <datalist id="rodFtTicks">${buildTickOptions(rod.baseFt, rod.maxFt, 1)}</datalist>
+      <div class="detail-price" id="rodPriceLabel">$${priceFor(ft).toFixed(2)}</div>
       <button class="detail-buy-btn" id="rodAddBtn">Add to Cart</button>
     `;
-    document.getElementById('rodFtSlider').addEventListener('input', e=>{ ft=parseInt(e.target.value); render(); });
+    // Only touch the readouts while dragging — rebuilding the whole card (and
+    // therefore recreating the <input> itself) on every 'input' tick used to
+    // kill the browser's pointer capture on the thumb mid-drag, which is what
+    // made the slider feel like a push-button instead of a smooth drag.
+    document.getElementById('rodFtSlider').addEventListener('input', e=>{
+      ft=parseInt(e.target.value);
+      document.getElementById('rodFtLabel').textContent = ft+' ft';
+      document.getElementById('rodPriceLabel').textContent = '$'+priceFor(ft).toFixed(2);
+    });
     document.getElementById('rodAddBtn').addEventListener('click', ()=>{
       addToCart({
         gearType:'rod', itemKey:rod.key, label:`${rod.desc} (${ft}ft)`, img:rod.img,
-        specValue:ft, lineType:null, price, quantity:1
+        specValue:ft, lineType:null, price:priceFor(ft), quantity:1
       });
       closeDetail();
     });
   };
-  render();
+  renderFull();
   detailOverlay.classList.add('show');
 }
 
@@ -937,11 +962,11 @@ function openReelDetail(reel){
 function openLineDetail(colorKey){
   let type = 'mono';
   let lb = 0;
-  const render = ()=>{
+  const renderFull = ()=>{
     const cat = type==='mono' ? MONO_LINE_CATALOG.find(l=>l.key===colorKey) : BRAID_LINE_CATALOG.find(l=>l.key===colorKey);
     if(lb < cat.baseLb || lb === 0) lb = cat.baseLb;
     if(lb > cat.maxLb) lb = cat.maxLb;
-    const price = cat.basePrice + (lb-cat.baseLb)*cat.addPerLb;
+    const priceFor = v => cat.basePrice + (v-cat.baseLb)*cat.addPerLb;
     detailCard.innerHTML = `
       <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
       <img src="gear/${cat.img}" alt="">
@@ -951,48 +976,62 @@ function openLineDetail(colorKey){
         <button id="typeBraidBtn" class="${type==='braid'?'active':''}">Braid</button>
       </div>
       <div class="desc">${type==='mono' ? 'mono line' : 'adds 5% casting distance and 5% reeling strength'}</div>
-      <div class="detail-row"><label>Line test</label><span>${lb} lb</span></div>
-      <input type="range" class="spec-slider" min="${cat.baseLb}" max="${cat.maxLb}" step="1" value="${lb}" id="lineLbSlider">
-      <div class="detail-price">$${price.toFixed(2)}</div>
+      <div class="detail-row"><label>Line test</label><span id="lineLbLabel">${lb} lb</span></div>
+      <input type="range" class="spec-slider" min="${cat.baseLb}" max="${cat.maxLb}" step="1" value="${lb}" id="lineLbSlider" list="lineLbTicks">
+      <datalist id="lineLbTicks">${buildTickOptions(cat.baseLb, cat.maxLb, 1)}</datalist>
+      <div class="detail-price" id="linePriceLabel">$${priceFor(lb).toFixed(2)}</div>
       <button class="detail-buy-btn" id="lineAddBtn">Add to Cart</button>
     `;
-    document.getElementById('typeMonoBtn').addEventListener('click', ()=>{ type='mono'; lb=0; render(); });
-    document.getElementById('typeBraidBtn').addEventListener('click', ()=>{ type='braid'; lb=0; render(); });
-    document.getElementById('lineLbSlider').addEventListener('input', e=>{ lb=parseInt(e.target.value); render(); });
+    document.getElementById('typeMonoBtn').addEventListener('click', ()=>{ type='mono'; lb=0; renderFull(); });
+    document.getElementById('typeBraidBtn').addEventListener('click', ()=>{ type='braid'; lb=0; renderFull(); });
+    // Live-update just the readouts on drag — see the note in openRodDetail
+    // about why the slider itself must not be rebuilt on every 'input' tick.
+    document.getElementById('lineLbSlider').addEventListener('input', e=>{
+      lb=parseInt(e.target.value);
+      document.getElementById('lineLbLabel').textContent = lb+' lb';
+      document.getElementById('linePriceLabel').textContent = '$'+priceFor(lb).toFixed(2);
+    });
     document.getElementById('lineAddBtn').addEventListener('click', ()=>{
       addToCart({
         gearType: type==='mono'?'mono_line':'braid_line', itemKey:colorKey,
         label:`${colorKey.replace('line','')} ${type} ${lb}lb`, img:cat.img,
-        specValue:lb, lineType:type, price, quantity:4 // 4 charges = 25% durability lost per line break
+        specValue:lb, lineType:type, price:priceFor(lb), quantity:4 // 4 charges = 25% durability lost per line break
       });
       closeDetail();
     });
   };
-  render();
+  renderFull();
   detailOverlay.classList.add('show');
 }
 
 function openLureDetail(lure){
   let oz = lure.baseOz;
-  const render = ()=>{
-    const steps = Math.round((oz-lure.baseOz)/lure.stepOz);
-    const price = lure.basePrice + steps*lure.addPerStep;
+  const priceFor = v => {
+    const steps = Math.round((v-lure.baseOz)/lure.stepOz);
+    return lure.basePrice + steps*lure.addPerStep;
+  };
+  const renderFull = ()=>{
     detailCard.innerHTML = `
       <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
       <img src="gear/${lure.img}" alt="">
       <h3>${lure.key.replace(/[0-9]/g,'').replace(/^\\w/,c=>c.toUpperCase())}</h3>
       <div class="desc">${lure.desc}</div>
-      <div class="detail-row"><label>Weight</label><span>${oz} oz</span></div>
-      <input type="range" class="spec-slider" min="${lure.baseOz}" max="${lure.maxOz}" step="${lure.stepOz}" value="${oz}" id="lureOzSlider">
-      <div class="detail-price">$${price.toFixed(2)} <span style="font-size:12px;color:#c9bda8;">/ pack</span></div>
+      <div class="detail-row"><label>Weight</label><span id="lureOzLabel">${oz} oz</span></div>
+      <input type="range" class="spec-slider" min="${lure.baseOz}" max="${lure.maxOz}" step="${lure.stepOz}" value="${oz}" id="lureOzSlider" list="lureOzTicks">
+      <datalist id="lureOzTicks">${buildTickOptions(lure.baseOz, lure.maxOz, lure.stepOz)}</datalist>
+      <div class="detail-price" id="lurePriceLabel">$${priceFor(oz).toFixed(2)} <span style="font-size:12px;color:#c9bda8;">/ pack</span></div>
       <button class="detail-buy-btn" id="lurePurchaseBtn">Purchase</button>
     `;
-    document.getElementById('lureOzSlider').addEventListener('input', e=>{ oz=parseFloat(e.target.value); render(); });
+    document.getElementById('lureOzSlider').addEventListener('input', e=>{
+      oz=parseFloat(e.target.value);
+      document.getElementById('lureOzLabel').textContent = oz+' oz';
+      document.getElementById('lurePriceLabel').innerHTML = '$'+priceFor(oz).toFixed(2)+' <span style="font-size:12px;color:#c9bda8;">/ pack</span>';
+    });
     document.getElementById('lurePurchaseBtn').addEventListener('click', ()=>{
-      openQtyPrompt(lure, oz, price);
+      openQtyPrompt(lure, oz, priceFor(oz));
     });
   };
-  render();
+  renderFull();
   detailOverlay.classList.add('show');
 }
 
