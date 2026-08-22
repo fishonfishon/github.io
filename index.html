@@ -444,7 +444,7 @@
 <div class="wrap" id="screenCast">
   <header>
     <h1>Saltwater Shore Fishing Simulator — Prototype</h1>
-    <p>Choose your set-up based on the type of saltwater fish you want like in real life. Then cast your lure by whipping your phone while holding the cast button. Casting distance is entirely dependant on how well your setup matches your whip. Once you have casted, you can either let your lure slowly sink to the bottom where you can start jigging by jigging your phone like a rod, or you can slowly reel in to simulate trolling, or you may do both! There is also a current that will affect the trajectory of your lure. Your caught fishes will be in your icebox on the bottom. Good luck!</p>
+    <p>Welcome to Fish On! Fish On! — a realistic saltwater shore fishing simulator set along the Pacific West Coast. This is an early prototype — lots of fun and interesting updates are on the way and will be tested in the coming days. Pick your gear and use your phone to cast, jig, and reel just like the real thing. Turn on the Tutorial below for step-by-step coaching, or jump right in. Good luck out there!</p>
     <button id="tutorialToggleBtn" aria-pressed="false">Tutorial</button>
   </header>
 
@@ -1585,6 +1585,15 @@
   const TENSION_DOTS = 8;
   let lineTension=0; // 0-1, smoothed — drives the tension meter
   let maxTensionTouches=0, wasAtMaxTension=false; // 3-strike system: breaks on the 3rd touch of max
+  // A severe enough gear mismatch (e.g. a big fish on light line, reeled fast)
+  // can drive targetTension to its cap and hold it there continuously — in
+  // that case tension never dips back below max between "touches", so the
+  // 3-strike counter above (which only counts a fresh touch once tension has
+  // dropped below max first) could get stuck at 1 forever and the line would
+  // never break no matter how long it stayed pinned at max. This sustained-
+  // duration timer catches that case independently of the strike counter.
+  let maxTensionSustainedSec=0, sustainWarned=false;
+  const MAX_TENSION_SUSTAIN_SEC=1.5;
 
   function rollForStrike(){
     if(!castActive || hookedFish || depthFt<=0) return;
@@ -1671,7 +1680,7 @@
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
     jumpCount=0; maxJumpsThisFight = 4 + Math.round(Math.random()); // 4 or 5
-    maxTensionTouches=0; wasAtMaxTension=false;
+    maxTensionTouches=0; wasAtMaxTension=false; maxTensionSustainedSec=0; sustainWarned=false;
     lowSpeedSince=null;
     landingCapMultiplier = rollLandingCapMultiplier();
     // A strike always engages the bail, same as a real reel — otherwise the
@@ -1695,7 +1704,7 @@
     hookedFish = { name:species.name, category:species.category, weight:weight, revealed:false };
     fishRunning=false; fishRunUntil=0;
     jumpCount=0; maxJumpsThisFight = 4 + Math.round(Math.random());
-    maxTensionTouches=0; wasAtMaxTension=false;
+    maxTensionTouches=0; wasAtMaxTension=false; maxTensionSustainedSec=0; sustainWarned=false;
     lowSpeedSince=null;
     landingCapMultiplier = rollLandingCapMultiplier();
     bailOpen=false; freeFalling=false; lockedLineFt=Math.hypot(distanceFt, depthFt);
@@ -2407,7 +2416,7 @@ window.loadUserCatches = async function loadUserCatches() {
     bottomDepthFt=depthProfileFt(0); bailOpen=false; freeFalling=false; bottomed=false;
     lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null; justLandedFish=false;
     fishJumping=false; splashActive=false;
-    lineTension=0; maxTensionTouches=0; wasAtMaxTension=false; updateTensionMeter();
+    lineTension=0; maxTensionTouches=0; wasAtMaxTension=false; maxTensionSustainedSec=0; sustainWarned=false; updateTensionMeter();
     transferInfo.textContent='Set your gear, then hold the bail to cast.';
     updateBailVisual(); updateReadouts(); drawScene();
     setStatus('Ready. Hold the bail button, wind up, and whip forward.', '');
@@ -2727,21 +2736,37 @@ window.loadUserCatches = async function loadUserCatches() {
 
         // Three strikes: hitting max tension is survivable the first two
         // times, breaks on the third. Only counts a fresh "touch" once
-        // tension has actually dropped back below max first.
+        // tension has actually dropped back below max first. On top of
+        // that, a severe enough mismatch can pin tension AT max
+        // continuously (never dipping below in between) — that case never
+        // registers a second or third "touch" by the logic above, so it's
+        // also timed: staying pinned at max for MAX_TENSION_SUSTAIN_SEC
+        // breaks the line on its own, regardless of the strike count.
         const litNow = Math.round(lineTension*TENSION_DOTS);
-        if(litNow>=TENSION_DOTS && !wasAtMaxTension){
-          wasAtMaxTension = true;
-          maxTensionTouches++;
-          window.fishOnHapticFlash([80,60,80,60,150]);
-          if(maxTensionTouches>=3){
+        if(litNow>=TENSION_DOTS){
+          maxTensionSustainedSec += dt;
+          if(!wasAtMaxTension){
+            wasAtMaxTension = true;
+            maxTensionTouches++;
+            window.fishOnHapticFlash([80,60,80,60,150]);
+            if(maxTensionTouches>=3){
+              breakLine();
+            } else if(maxTensionTouches===2){
+              setStatus('YOUR LINE HIT MAX TENSION AGAIN! ONE MORE AND IT SNAPS!', 'bad');
+            } else {
+              setStatus('YOUR LINE IS ABOUT TO SNAP! EASE OFF!', 'bad');
+            }
+          } else if(maxTensionSustainedSec>=MAX_TENSION_SUSTAIN_SEC){
             breakLine();
-          } else if(maxTensionTouches===2){
-            setStatus('YOUR LINE HIT MAX TENSION AGAIN! ONE MORE AND IT SNAPS!', 'bad');
-          } else {
-            setStatus('YOUR LINE IS ABOUT TO SNAP! EASE OFF!', 'bad');
+          } else if(!sustainWarned && maxTensionSustainedSec>=MAX_TENSION_SUSTAIN_SEC*0.5){
+            sustainWarned = true;
+            window.fishOnHapticFlash([80,60,80,60,150]);
+            setStatus('YOUR LINE IS PINNED AT MAX TENSION — EASE OFF NOW OR IT SNAPS!', 'bad');
           }
-        } else if(litNow<TENSION_DOTS){
+        } else {
           wasAtMaxTension = false;
+          maxTensionSustainedSec = 0;
+          sustainWarned = false;
         }
       } else {
         lineTension += (0-lineTension) * Math.min(1, 2*dt);
