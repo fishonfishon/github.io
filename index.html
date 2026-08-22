@@ -224,7 +224,7 @@
   .ro .v{font-size:15px;font-weight:700;color:var(--paper);}
   .ro .l{color:#8fa0a0;font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;}
 
-  .rig-area{display:flex;align-items:center;justify-content:center;gap:18px;padding:14px;}
+  .rig-area{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 10px;}
   #reelBailBtn{width:140px;height:76px;background:transparent;border:none;cursor:pointer;padding:0;}
   .bail-stack{ position:relative; width:140px; height:76px; margin:0 auto; }
   .bail-stack #reelBailBtn{ position:absolute; inset:0; }
@@ -258,6 +258,7 @@
   }
   #reelWheel .dial-rotor::after{content:'';position:absolute;top:8px;left:50%;width:4px;height:20px;background:var(--accent);transform:translateX(-50%);border-radius:2px;}
 
+  .wheel-label-wrap{ display:flex; flex-direction:column; align-items:center; gap:6px; }
   #tensionMeter{ display:flex; flex-direction:column; align-items:center; gap:6px; }
   .tension-dots{ display:flex; flex-direction:column; gap:5px; }
   .tension-dot{
@@ -392,7 +393,7 @@
   #reelScene{ grid-area:canvas; width:100%; height:100%; align-self:stretch; }
   .readouts{ grid-area:readouts; margin:8px 0 0; }
   #reelStatusWrap{ grid-area:reelstat; margin:6px 0 0; }
-  #bailRigArea{ grid-area:bail; padding:6px 0 0; }
+  #bailRigArea{ grid-area:bail; padding:2px 0 0; }
   #wheelRigArea{ grid-area:wheel; padding:0; }
   #iceboxWrap{ grid-area:icebox; margin:8px 0 0; }
   #marketBulletin{ grid-area:bulletin; margin-top:8px; }
@@ -560,7 +561,10 @@
     <button id="releaseFishBtn" aria-label="Release fish" style="display:none;">RELEASE</button>
   </div>
   <div class="rig-area" id="wheelRigArea" style="padding-top:0;">
-    <div id="reelWheel"><img id="wheelLogo" src="images/logo.png" alt="logo"><div class="dial-rotor" id="dialRotor"></div></div>
+    <div class="wheel-label-wrap">
+      <div id="reelWheel"><img id="wheelLogo" src="images/logo.png" alt="logo"><div class="dial-rotor" id="dialRotor"></div></div>
+      <div class="tension-label">REEL: ROTATE<br>CLOCKWISE TO REEL IN</div>
+    </div>
     <div id="tensionMeter">
       <div class="tension-dots">
         <span class="tension-dot" data-level="8"></span>
@@ -2345,13 +2349,21 @@ window.loadUserCatches = async function loadUserCatches() {
   let prevDistanceFt = 0, prevDepthFt = 0;
   let fishFacingFlip = false, fishTiltAngle = 0; // orientation of the hooked fish's real photo, based on actual movement
   let castActive = false, lockedLineFt = null, recastPending = false;
+  // True for the brief window between landing a fish (landFish()) and the
+  // setTimeout(fullReset,...) that follows it — lets the tutorial highlight
+  // the icebox right at the moment of the catch, before the game loops back
+  // into "ready to cast". Cleared by fullReset().
+  let justLandedFish = false;
   window.fishOnIsCastActive = function(){ return castActive; };
   // Live physics snapshot for the tutorial module (a separate closure) — read
   // fresh on every call so hints can react to the actual current moment of a
   // cast (lure in the air vs. sinking vs. on the bottom vs. fish on) instead
   // of a remembered "have we ever done this" flag.
   window.fishOnGetFightState = function(){
-    return { castActive, bailOpen, freeFalling, bottomed, hookedFish: !!hookedFish };
+    return {
+      castActive, bailOpen, freeFalling, bottomed, hookedFish: !!hookedFish,
+      reelSpeedFtPerSec, justLandedFish
+    };
   };
 
   const statusEl=document.getElementById('reelStatus');
@@ -2393,7 +2405,7 @@ window.loadUserCatches = async function loadUserCatches() {
     window.fishOnSound.stopRunAlert();
     castActive=false; recastPending=false; distanceFt=0; depthFt=0;
     bottomDepthFt=depthProfileFt(0); bailOpen=false; freeFalling=false; bottomed=false;
-    lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null;
+    lockedLineFt=null; reelSpeedFtPerSec=0; hookedFish=null; justLandedFish=false;
     fishJumping=false; splashActive=false;
     lineTension=0; maxTensionTouches=0; wasAtMaxTension=false; updateTensionMeter();
     transferInfo.textContent='Set your gear, then hold the bail to cast.';
@@ -2740,6 +2752,7 @@ window.loadUserCatches = async function loadUserCatches() {
         recastPending=true;
         const caughtFish = hookedFish;
         if(caughtFish){
+          justLandedFish = true;
           landFish();
         } else {
           window.fishOnHaptic([35,45,35]);
@@ -3578,6 +3591,8 @@ if(supabaseClient){
       castActive: !!fight.castActive, bailOpen: !!fight.bailOpen,
       freeFalling: !!fight.freeFalling, bottomed: !!fight.bottomed,
       hookedFish: !!fight.hookedFish,
+      isReeling: (fight.reelSpeedFtPerSec||0) > 0.05,
+      justLanded: !!fight.justLandedFish,
     };
   }
 
@@ -3598,6 +3613,23 @@ if(supabaseClient){
     { key:'pick_gear', test:s=> s.signedIn && !s.hasNoGear && s.gearIncomplete,
       text:"Pick your rod, reel, line, and lure from the dropdowns above — you're missing at least one.",
       target:'#gearPanel' },
+    // All three icebox-ish hints have to sit ahead of 'cast' below: 'cast'
+    // matches on nothing but !castActive, which is also true for all of them,
+    // so if it came first it would always win and these could never show.
+    // fish_caught_icebox goes first of the three since it's the most specific
+    // and most time-sensitive — it only matches during the brief window right
+    // after a landing, and should win over the more general icebox_intro even
+    // though both may be true at that instant (the fish is already tallied
+    // into the icebox count by the time this fires).
+    { key:'fish_caught_icebox', test:s=> s.justLanded,
+      text:"Nice catch! It goes straight into your Icebox below — sell it there while it's fresh for the best price, then use that cash to buy better gear in the shop.",
+      target:'#iceboxWrap' },
+    { key:'icebox_sell', test:s=> s.iceboxOpen && s.iceboxCount>0,
+      text:"Tap Sell on a fish in your icebox to cash it in, or Discard to release it.",
+      target:'#iceboxWrap' },
+    { key:'icebox_intro', test:s=> !s.castActive && s.iceboxCount>0 && !s.iceboxOpen,
+      text:"Nice catch! Open your Icebox below to see it and sell it for cash.",
+      target:'#iceboxWrap' },
     { key:'cast', test:s=> !s.castActive,
       text:"Hold the CAST button, whip your phone forward like a real cast, then let go!",
       target:'#castBtn' },
@@ -3606,15 +3638,16 @@ if(supabaseClient){
       target:'#bailRigArea' },
     { key:'lure_bottomed', test:s=> s.castActive && s.bottomed && s.bailOpen && !s.hookedFish,
       target:'#bailRigArea', glowOnly:true }, // the game's own "Bottom! Felt it at..." status is already the full instruction
-    { key:'fish_on', test:s=> s.hookedFish,
-      text:"Fish on! Watch the line tension dots on the right — the higher they climb, the closer you are to a snap. Switch Reel Sensitivity to Slow when tension's high to ease off, or Fast to bring in a fish that's not much of a fight.",
+    // Fish on: coach the reel first (spin clockwise to bring it in); once
+    // they're actually reeling (live reelSpeedFtPerSec, not a one-time flag —
+    // so this correctly flips back if they let off and grab the wheel again),
+    // shift the coaching to tension/sensitivity instead.
+    { key:'fish_on_reel', test:s=> s.hookedFish && !s.isReeling,
+      text:"Fish on! Spin the reel wheel clockwise — like cranking a real reel handle — to bring it in.",
+      target:'#reelWheel' },
+    { key:'fish_on_tension', test:s=> s.hookedFish && s.isReeling,
+      text:"Now watch the line tension dots on the right — the higher they climb, the closer you are to a snap. Switch Reel Sensitivity to Slow when tension's high to ease off, or Fast to bring in a fish that's not much of a fight.",
       target:['#tensionMeter','#sensSeg'] },
-    { key:'icebox_intro', test:s=> !s.castActive && s.iceboxCount>0 && !s.iceboxOpen,
-      text:"Nice catch! Open your Icebox below to see it and sell it for cash.",
-      target:'#iceboxWrap' },
-    { key:'icebox_sell', test:s=> s.iceboxOpen && s.iceboxCount>0,
-      text:"Tap Sell on a fish in your icebox to cash it in, or Discard to release it.",
-      target:'#iceboxWrap' },
   ];
 
   function pickHint(){
