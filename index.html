@@ -1142,7 +1142,14 @@
   let burstDetectedAt=null;  // timestamp the burst threshold was first crossed, else null
   let castWindowTimer=null;  // fires if no release is detected within the window — cancels the arm
   let burstConfirmTimer=null;// short delay after burst onset, so the true peak (often 1-2 samples later) is captured before locking in
-  const CAST_WINDOW_MS = 5000;
+  // The window is an initial context message (so the countdown that follows
+  // doesn't just throw a bare number at the player with no explanation) plus
+  // the actual 5-second countdown — CAST_WINDOW_MS is their sum, so a player
+  // really gets COUNTDOWN_INTRO_MS + COUNTDOWN_SECONDS*1000 (7s total) to
+  // release, even though the visible countdown itself only ever shows 5.
+  const COUNTDOWN_INTRO_MS = 2000;
+  const COUNTDOWN_SECONDS = 5;
+  const CAST_WINDOW_MS = COUNTDOWN_INTRO_MS + COUNTDOWN_SECONDS*1000;
   const ARM_GRACE_MS = 250;
   const EMA_ALPHA = 0.12;
   const BURST_RATIO = 1.7;
@@ -1172,24 +1179,32 @@
 
   // Live countdown in the same banner the reeling script (a separate closure)
   // uses for "FISH ON!!" — reused via window.fishOnShowBanner/HideBanner since
-  // showFishOnBanner()'s DOM element and helpers live over there.
-  let countdownInterval=null, countdownVal=0;
+  // showFishOnBanner()'s DOM element and helpers live over there. Leads with a
+  // plain-language message for COUNTDOWN_INTRO_MS so a bare number doesn't
+  // hit the player with no context the instant they tap CAST, then counts
+  // down from COUNTDOWN_SECONDS once they know what it means.
+  let countdownInterval=null, countdownVal=0, countdownIntroTimer=null;
   function startCastCountdown(){
     stopCastCountdown();
-    countdownVal = Math.round(CAST_WINDOW_MS/1000);
-    if(window.fishOnShowBanner) window.fishOnShowBanner(String(countdownVal), true);
-    countdownInterval = setInterval(()=>{
-      countdownVal--;
-      // Safety net only — cancelCastWindow()'s own castWindowTimer fires at
-      // the same ~5000ms mark and normally hides the banner first.
-      if(countdownVal<=0){ stopCastCountdown(true); return; }
+    if(window.fishOnShowBanner) window.fishOnShowBanner('Cast Within 5 Seconds!', true);
+    countdownIntroTimer = setTimeout(()=>{
+      countdownIntroTimer=null;
+      countdownVal = COUNTDOWN_SECONDS;
       if(window.fishOnShowBanner) window.fishOnShowBanner(String(countdownVal), true);
-    }, 1000);
+      countdownInterval = setInterval(()=>{
+        countdownVal--;
+        // Safety net only — cancelCastWindow()'s own castWindowTimer fires at
+        // the same ~CAST_WINDOW_MS mark and normally hides the banner first.
+        if(countdownVal<=0){ stopCastCountdown(true); return; }
+        if(window.fishOnShowBanner) window.fishOnShowBanner(String(countdownVal), true);
+      }, 1000);
+    }, COUNTDOWN_INTRO_MS);
   }
   // hide=false leaves whatever's currently on the banner alone (used right
   // before finalizeCast swaps it to "Good Cast!"); hide=true clears it (used
   // when the attempt fizzles — timeout or a too-weak manual release).
   function stopCastCountdown(hide){
+    clearTimeout(countdownIntroTimer); countdownIntroTimer=null;
     clearInterval(countdownInterval); countdownInterval=null;
     if(hide && window.fishOnHideBanner) window.fishOnHideBanner();
   }
