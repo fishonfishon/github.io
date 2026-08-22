@@ -115,9 +115,10 @@
   #gearShopSign .chalk-title{ font-size:17px; }
 
   #tutorialToggleBtn{
-    display:block; width:100%; margin:0 0 12px; padding:9px;
-    border-radius:9px; border:1px solid var(--line); background:rgba(255,255,255,0.06);
-    color:var(--paper); font-size:12.5px; font-weight:700; cursor:pointer;
+    display:block; width:max-content; margin:10px auto 0; padding:5px 16px;
+    border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,0.06);
+    color:var(--paper); font-size:10.5px; font-weight:800; letter-spacing:0.08em;
+    text-transform:uppercase; cursor:pointer;
   }
   #tutorialToggleBtn[aria-pressed="true"]{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
 
@@ -369,7 +370,6 @@
     grid-template-columns: 2.2fr 1fr;
     grid-template-areas:
       "title     gear"
-      "tutbtn    gear"
       "reelstat  gear"
       "canvas    bail"
       "canvas    wheel"
@@ -379,16 +379,16 @@
       "reeldbg   autopanel"
       "resetrow  autopanel"
       "legal     legal";
-    grid-template-rows: auto auto auto minmax(140px,1fr) auto auto auto auto auto auto auto;
+    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto auto auto;
     column-gap:10px; row-gap:6px;
     max-width:1080px; margin:0 auto; padding:10px 10px 16px;
     max-height:none;
   }
-  #screenCast.wrap > header{ grid-area:title; padding:0 0 6px; border-bottom:1px solid var(--line); }
+  #screenCast.wrap > header{ grid-area:title; padding:0 0 10px; border-bottom:1px solid var(--line); }
   #screenCast.wrap > header h1{ font-size:13px; }
   #screenCast.wrap > header p{ font-size:11px; }
+  #screenCast.wrap > header #tutorialToggleBtn{ margin:8px auto 0; }
   #screenCast.wrap > .panel{ grid-area:gear; border:none; padding:0; }
-  #tutorialToggleBtn{ grid-area:tutbtn; width:auto; max-width:280px; margin:2px 0 0; padding:7px 12px; }
   #reelScene{ grid-area:canvas; width:100%; height:100%; align-self:stretch; }
   .readouts{ grid-area:readouts; margin:8px 0 0; }
   #reelStatusWrap{ grid-area:reelstat; margin:6px 0 0; }
@@ -444,9 +444,8 @@
   <header>
     <h1>Saltwater Shore Fishing Simulator — Prototype</h1>
     <p>Choose your set-up based on the type of saltwater fish you want like in real life. Then cast your lure by whipping your phone while holding the cast button. Casting distance is entirely dependant on how well your setup matches your whip. Once you have casted, you can either let your lure slowly sink to the bottom where you can start jigging by jigging your phone like a rod, or you can slowly reel in to simulate trolling, or you may do both! There is also a current that will affect the trajectory of your lure. Your caught fishes will be in your icebox on the bottom. Good luck!</p>
+    <button id="tutorialToggleBtn" aria-pressed="false">Tutorial</button>
   </header>
-
-  <button id="tutorialToggleBtn" aria-pressed="false">🎓 Tutorial: <span id="tutorialToggleState">Off</span></button>
 
   <div class="panel" id="gearPanel">
     <a href="shop.html" id="gearShopSign">
@@ -2246,6 +2245,13 @@ window.loadUserCatches = async function loadUserCatches() {
   let fishFacingFlip = false, fishTiltAngle = 0; // orientation of the hooked fish's real photo, based on actual movement
   let castActive = false, lockedLineFt = null, recastPending = false;
   window.fishOnIsCastActive = function(){ return castActive; };
+  // Live physics snapshot for the tutorial module (a separate closure) — read
+  // fresh on every call so hints can react to the actual current moment of a
+  // cast (lure in the air vs. sinking vs. on the bottom vs. fish on) instead
+  // of a remembered "have we ever done this" flag.
+  window.fishOnGetFightState = function(){
+    return { castActive, bailOpen, freeFalling, bottomed, hookedFish: !!hookedFish };
+  };
 
   const statusEl=document.getElementById('reelStatus');
   const roDepth=document.getElementById('roDepth'), roDist=document.getElementById('roDist'), roBail=document.getElementById('roBail');
@@ -2292,6 +2298,7 @@ window.loadUserCatches = async function loadUserCatches() {
     transferInfo.textContent='Set your gear, then hold the bail to cast.';
     updateBailVisual(); updateReadouts(); drawScene();
     setStatus('Ready. Hold the bail button, wind up, and whip forward.', '');
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('cast_reset');
   }
 
   window.startReelPhase = function(distFt, oz){
@@ -2304,6 +2311,7 @@ window.loadUserCatches = async function loadUserCatches() {
     setStatus('Lure landed at '+distanceFt.toFixed(0)+'ft. Bail is open — press the arc to close it and start reeling.', '');
     updateBailVisual(); updateReadouts();
     fitCanvas(); drawScene();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('lure_landed');
   };
   document.getElementById('reelResetBtn').addEventListener('click', fullReset);
 
@@ -2363,6 +2371,7 @@ window.loadUserCatches = async function loadUserCatches() {
       setStatus('Bail open — lure free-spooling straight down.', '');
     }
     updateBailVisual(); updateReadouts();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('bail_toggled');
   });
   function endBailHold(){
     if(!castHoldPointer) return;
@@ -2625,6 +2634,7 @@ window.loadUserCatches = async function loadUserCatches() {
         depthFt=bottomDepthFt; bottomed=true; freeFalling=false;
         window.fishOnHaptic(40); window.fishOnSound.bottomThud();
         setStatus('Bottom! Felt it at '+depthFt.toFixed(0)+'ft. Close the bail, then flick your phone up to jig — or start reeling.', 'ok');
+        window.fishOnTutorialEvent && window.fishOnTutorialEvent('lure_bottomed');
       }
     }
 
@@ -3146,34 +3156,35 @@ if(supabaseClient){
 // cast button, not a step-pacing timer.
 (function(){
   const toggleBtn = document.getElementById('tutorialToggleBtn');
-  const toggleState = document.getElementById('tutorialToggleState');
   const closeBtn = document.getElementById('tutorialCloseBtn');
   const statusEl = document.getElementById('reelStatus');
   if(!toggleBtn || !statusEl || !closeBtn) return;
 
   let enabled = true; // guests default ON; sign-in loads their saved preference below
-  let currentGlowEl = null;
+  let currentGlowEls = [];
   let currentHintKey = null;
 
-  const flags = {
-    gearSelected:false, cast:false, reeled:false, sensitivity:false,
-    landed:false, sold:false, autoCast:false, iceboxOpened:false,
-    hooked:false, noMotion:false
-  };
+  // The only things worth remembering PERMANENTLY across the whole session —
+  // everything else is re-derived fresh from live game state each time, so
+  // hints repeat every cast/fight/sell cycle instead of only firing once ever.
+  const flags = { noMotion:false };
 
   function clearGlow(){
-    if(currentGlowEl){ currentGlowEl.classList.remove('tutorial-glow'); currentGlowEl=null; }
+    currentGlowEls.forEach(el=> el.classList.remove('tutorial-glow'));
+    currentGlowEls = [];
     statusEl.classList.remove('tutorial-glow');
     closeBtn.classList.remove('show');
   }
-  function applyGlow(selector){
-    if(currentGlowEl){ currentGlowEl.classList.remove('tutorial-glow'); currentGlowEl=null; }
+  function applyGlow(selectorOrList){
+    currentGlowEls.forEach(el=> el.classList.remove('tutorial-glow'));
+    currentGlowEls = [];
     statusEl.classList.add('tutorial-glow');
     closeBtn.classList.add('show');
-    if(selector){
-      const el = document.querySelector(selector);
-      if(el && el!==statusEl){ el.classList.add('tutorial-glow'); currentGlowEl = el; }
-    }
+    const selectors = Array.isArray(selectorOrList) ? selectorOrList : (selectorOrList ? [selectorOrList] : []);
+    selectors.forEach(sel=>{
+      const el = document.querySelector(sel);
+      if(el && el!==statusEl){ el.classList.add('tutorial-glow'); currentGlowEls.push(el); }
+    });
   }
   // Every tutorial message goes through the SAME setStatus the rest of the
   // game uses (so it really is "in the coach's box," Coach: prefix and all) —
@@ -3197,11 +3208,19 @@ if(supabaseClient){
     const iceboxOpen = !!(iceboxWrap && iceboxWrap.classList.contains('open'));
     const iceboxCountEl = document.getElementById('iceboxCount');
     const iceboxCount = iceboxCountEl ? (parseInt((iceboxCountEl.textContent||'').replace(/\D/g,''),10)||0) : 0;
-    return { signedIn, hasNoGear, gearIncomplete, iceboxOpen, iceboxCount };
+    const fight = window.fishOnGetFightState ? window.fishOnGetFightState() : {};
+    return {
+      signedIn, hasNoGear, gearIncomplete, iceboxOpen, iceboxCount,
+      castActive: !!fight.castActive, bailOpen: !!fight.bailOpen,
+      freeFalling: !!fight.freeFalling, bottomed: !!fight.bottomed,
+      hookedFish: !!fight.hookedFish,
+    };
   }
 
-  // Priority order — first matching rule wins. Sign-in and owning gear are
-  // real prerequisites, so they always outrank everything else.
+  // Priority order — first matching rule wins. Everything below signin/no_gear
+  // is derived from LIVE state (not "have we ever done this" flags), so the
+  // same hint reappears every cast/fight/sell cycle for as long as the
+  // tutorial stays on, instead of only coaching through the loop once.
   const HINTS = [
     { key:'signin', test:s=> !s.signedIn,
       text:"Sign in first — tap the 👤 button, top left, with email or Google. That's what saves your gear, wallet, and catches.",
@@ -3209,31 +3228,29 @@ if(supabaseClient){
     { key:'no_gear', test:s=> s.signedIn && s.hasNoGear,
       text:"You don't own any gear yet — tap the FOFO Gear Shop sign below and grab the free Starter Pack.",
       target:'#gearShopSign' },
-    { key:'no_motion', test:()=> flags.noMotion && !flags.cast,
+    { key:'no_motion', test:s=> flags.noMotion && !s.castActive,
       text:"No phone motion detected — looks like you're on a computer. Use Auto Cast and Jig below instead of whipping the phone.",
       target:'#castControlsRow' },
     { key:'pick_gear', test:s=> s.signedIn && !s.hasNoGear && s.gearIncomplete,
       text:"Pick your rod, reel, line, and lure from the dropdowns above — you're missing at least one.",
       target:'#gearPanel' },
-    { key:'cast', test:()=> !flags.cast,
+    { key:'cast', test:s=> !s.castActive,
       text:"Hold the CAST button, whip your phone forward like a real cast, then let go!",
       target:'#castBtn' },
-    { key:'fish_on', test:()=> flags.hooked && !flags.landed, target:'#reelWheel', glowOnly:true },
-    { key:'reel', test:()=> flags.cast && !flags.reeled,
-      text:"Turn the reel wheel with a circular motion of your finger to bring your line in.",
-      target:'#reelWheel' },
-    { key:'sensitivity', test:()=> flags.reeled && !flags.sensitivity,
-      text:"Try Reel Sensitivity — Slow is safer on strong fish, Fast brings in an outmatched fish quicker.",
-      target:'#sensSeg' },
-    { key:'icebox_intro', test:()=> flags.landed && !flags.iceboxOpened,
+    { key:'lure_landed', test:s=> s.castActive && s.bailOpen && s.freeFalling && !s.bottomed && !s.hookedFish,
+      text:"Your lure's in the water and sinking. Close the bail any time (tap the arc) to start jigging — flick your phone up — or reel in slowly to troll it. Or let it keep sinking all the way to the bottom.",
+      target:'#bailRigArea' },
+    { key:'lure_bottomed', test:s=> s.castActive && s.bottomed && s.bailOpen && !s.hookedFish,
+      target:'#bailRigArea', glowOnly:true }, // the game's own "Bottom! Felt it at..." status is already the full instruction
+    { key:'fish_on', test:s=> s.hookedFish,
+      text:"Fish on! Watch the line tension dots on the right — the higher they climb, the closer you are to a snap. Switch Reel Sensitivity to Slow when tension's high to ease off, or Fast to bring in a fish that's not much of a fight.",
+      target:['#tensionMeter','#sensSeg'] },
+    { key:'icebox_intro', test:s=> !s.castActive && s.iceboxCount>0 && !s.iceboxOpen,
       text:"Nice catch! Open your Icebox below to see it and sell it for cash.",
       target:'#iceboxWrap' },
-    { key:'icebox_sell', test:s=> s.iceboxOpen && s.iceboxCount>0 && !flags.sold,
+    { key:'icebox_sell', test:s=> s.iceboxOpen && s.iceboxCount>0,
       text:"Tap Sell on a fish in your icebox to cash it in, or Discard to release it.",
       target:'#iceboxWrap' },
-    { key:'auto_cast_tip', test:()=> flags.cast && flags.reeled && flags.landed && flags.sold && !flags.autoCast,
-      text:"Tip: don't feel like whipping your phone every time? Auto Cast and Jig below works with no phone motion at all.",
-      target:'#castControlsRow' },
   ];
 
   function pickHint(){
@@ -3255,25 +3272,18 @@ if(supabaseClient){
     if(hint.glowOnly) applyGlow(hint.target); else say(hint.text, hint.target);
   }
 
-  function setFlagsForEvent(eventName){
-    switch(eventName){
-      case 'gear_selected': flags.gearSelected = true; break;
-      case 'cast_performed': flags.cast = true; flags.hooked = false; break;
-      case 'auto_cast_used': flags.autoCast = true; flags.cast = true; flags.hooked = false; break;
-      case 'reeling_performed': flags.reeled = true; break;
-      case 'sensitivity_changed': flags.sensitivity = true; break;
-      case 'fish_hooked': flags.hooked = true; break;
-      case 'fish_landed': flags.landed = true; flags.hooked = false; break;
-      case 'fish_sold': flags.sold = true; break;
-      case 'icebox_opened': flags.iceboxOpened = true; break;
-      case 'cast_attempt_no_motion': flags.noMotion = true; break;
-      default: break; // 'gear_owned_changed' / 'auth_changed' just trigger a live re-check
-    }
+  function handleEvent(eventName){
+    if(eventName==='cast_attempt_no_motion') flags.noMotion = true;
+    // Everything else (gear_selected, cast_performed, auto_cast_used,
+    // reeling_performed, sensitivity_changed, fish_hooked, fish_landed,
+    // fish_sold, icebox_opened, bail_toggled, gear_owned_changed,
+    // auth_changed) needs no bookkeeping here — refreshHint() below reads the
+    // live state those actions just changed.
   }
 
   window.fishOnTutorialEvent = function(eventName){
     if(!enabled) return;
-    setFlagsForEvent(eventName);
+    handleEvent(eventName);
     refreshHint();
   };
   // Called by setStatus() whenever real gameplay text overwrites the coach
@@ -3289,12 +3299,14 @@ if(supabaseClient){
   // A one-shot reaction to the user holding the cast button, not a pacing
   // timer: if no real devicemotion sample has arrived shortly after, this is
   // almost certainly a desktop/laptop, and "whip your phone" is bad advice.
+  // Runs on every cast attempt (not just the first) so the correction keeps
+  // showing up each time, for as long as this device never proves otherwise.
   const castBtnEl = document.getElementById('castBtn');
   if(castBtnEl){
     castBtnEl.addEventListener('pointerdown', ()=>{
-      if(!enabled || flags.cast || window.__fishOnGotMotionSample) return;
+      if(!enabled || window.__fishOnGotMotionSample) return;
       setTimeout(()=>{
-        if(!window.__fishOnGotMotionSample && !flags.cast){
+        if(!window.__fishOnGotMotionSample){
           window.fishOnTutorialEvent('cast_attempt_no_motion');
         }
       }, 1200);
@@ -3305,7 +3317,6 @@ if(supabaseClient){
   function setEnabled(v){
     enabled = v;
     toggleBtn.setAttribute('aria-pressed', v?'true':'false');
-    toggleState.textContent = v?'On':'Off';
     if(v){ currentHintKey=null; refreshHint(); }
     else { clearGlow(); currentHintKey=null; }
   }
