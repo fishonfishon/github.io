@@ -23,7 +23,7 @@
     min-height:100vh; padding-bottom:40px;
   }
   a{color:var(--accent);}
-  .wrap{max-width:900px;margin:0 auto;padding:14px 16px 40px;}
+  .wrap{max-width:900px;margin:0 auto;padding:54px 16px 40px;} /* top padding clears the fixed Sign In button, top:8px/left:8px */
 
   header{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 16px;flex-wrap:wrap;gap:10px;}
   header h1{font-family:'Kalam',cursive;font-size:26px;margin:0;text-shadow:0 2px 6px rgba(0,0,0,0.6);}
@@ -158,9 +158,80 @@
   #cartMsg{font-size:12px; text-align:center; margin-top:8px; min-height:16px;}
 
   .empty-msg{text-align:center; color:#c9bda8; font-size:13px; padding:20px 0;}
+
+  /* Account / auth — matches the main game's sign-in flow so a player who
+     lands here without an account (most likely trying to claim the Starter
+     Pack) doesn't have to leave the shop to sign up. */
+  #accountBtn {
+    height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--line);
+    background: rgba(20,30,32,0.85); color: var(--paper); font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; gap: 5px; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3); max-width: 150px; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+  }
+  #authModal{
+    position:fixed; inset:0; z-index:95; background:rgba(0,0,0,0.55);
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  #authModal.show{ display:flex; }
+  .auth-card{
+    position:relative; width:100%; max-width:320px;
+    background:#1a2422; border:1px solid var(--line); border-radius:14px;
+    padding:24px 20px 20px; box-shadow:0 8px 30px rgba(0,0,0,0.5);
+  }
+  .auth-card h2{ margin:0 0 14px; font-size:16px; color:var(--paper); text-align:center; }
+  #authCloseBtn{
+    position:absolute; top:10px; right:12px; background:none; border:none;
+    color:#9fb0b0; font-size:20px; line-height:1; cursor:pointer; padding:4px;
+  }
+  .oauth-btn{
+    width:100%; padding:11px; margin-bottom:8px; border-radius:9px; border:1px solid var(--line);
+    background:rgba(255,255,255,0.05); color:var(--paper); font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .oauth-btn:active{ background:rgba(255,255,255,0.1); }
+  .auth-divider{
+    text-align:center; color:#6f8080; font-size:11px; margin:14px 0;
+    position:relative;
+  }
+  .auth-divider::before, .auth-divider::after{
+    content:''; position:absolute; top:50%; width:40%; height:1px; background:var(--line);
+  }
+  .auth-divider::before{ left:0; } .auth-divider::after{ right:0; }
+  .auth-card input{
+    width:100%; padding:10px 12px; margin-bottom:8px; border-radius:8px;
+    border:1px solid var(--line); background:#26312f; color:var(--paper); font-size:13px;
+  }
+  #authError{ font-size:11.5px; color:var(--bad); min-height:16px; margin-bottom:6px; line-height:1.4; }
+  .auth-toggle{ text-align:center; font-size:11.5px; color:#9fb0b0; margin-top:12px; }
+  .auth-toggle a{ color:var(--accent); font-weight:700; text-decoration:none; margin-left:4px; }
 </style>
 </head>
 <body>
+
+<div id="accountContainer" style="position: fixed; top: 8px; left: 8px; z-index: 90;">
+  <button id="accountBtn" aria-label="Account">👤 Sign In</button>
+  <div id="accountDropdown" style="display: none; position: absolute; left: 0; top: 100%; margin-top: 5px; background: #1a1a1a; border: 1px solid #333; padding: 8px; border-radius: 6px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+    <button id="signOutBtn" style="background: #d9534f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap;">Sign Out</button>
+  </div>
+</div>
+
+<div id="authModal">
+  <div class="auth-card">
+    <button id="authCloseBtn" aria-label="Close">×</button>
+    <h2 id="authTitle">Sign In</h2>
+    <button class="oauth-btn" id="googleSignInBtn">Continue with Google</button>
+    <div class="auth-divider">or</div>
+    <input type="email" id="authEmail" placeholder="Email" autocomplete="email">
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+    <div id="authError"></div>
+    <button id="authSubmitBtn" class="btn-ok" style="width:100%;">Sign In</button>
+    <div class="auth-toggle">
+      <span id="authToggleText">Don't have an account?</span>
+      <a href="#" id="authToggleLink">Sign Up</a>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
   <header>
     <h1>🎣 FOFO Gear Shop</h1>
@@ -286,6 +357,163 @@ async function saveWallet(userId){
   await supabaseClient.from('FOFO Wallet').upsert({ player_id:userId, balance:walletBalance });
 }
 
+// ======================= ACCOUNT / AUTH =======================
+// A player landing here without an account will most likely be trying to
+// claim the free Starter Pack — every "sign in first" message in this file
+// used to just point them back to the main game. This block ports the main
+// game's own sign-in modal (Google OAuth + email sign-in/sign-up) in so they
+// never have to leave the shop to get signed in.
+const accountBtn = document.getElementById('accountBtn');
+const accountDropdown = document.getElementById('accountDropdown');
+const signOutBtn = document.getElementById('signOutBtn');
+const authModal = document.getElementById('authModal');
+const authTitle = document.getElementById('authTitle');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authError = document.getElementById('authError');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const googleSignInBtn = document.getElementById('googleSignInBtn');
+const authToggleText = document.getElementById('authToggleText');
+const authToggleLink = document.getElementById('authToggleLink');
+
+let authMode = 'signin';
+function setAuthMode(m){
+  authMode = m;
+  authTitle.textContent = m==='signin' ? 'Sign In' : 'Create Account';
+  authSubmitBtn.textContent = m==='signin' ? 'Sign In' : 'Sign Up';
+  authToggleText.textContent = m==='signin' ? "Don't have an account?" : 'Already have an account?';
+  authToggleLink.textContent = m==='signin' ? 'Sign Up' : 'Sign In';
+  authError.textContent='';
+}
+function showAuthModal(){ if(authModal) authModal.classList.add('show'); }
+function hideAuthModal(){ if(authModal){ authModal.classList.remove('show'); authError.textContent=''; authEmail.value=''; authPassword.value=''; } }
+
+async function setUsername(desiredUsername){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session || !session.user) return { success:false, error:'Not logged in' };
+  const { error } = await supabaseClient.from('profiles').upsert([{ id: session.user.id, username: desiredUsername }], { onConflict:'id' });
+  if(error){
+    if(error.code==='23505') return { success:false, error:'That account name is already taken! Try another.' };
+    return { success:false, error:error.message };
+  }
+  return { success:true };
+}
+async function checkAndPromptUsername(){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if(!session || !session.user) return;
+  const { data } = await supabaseClient.from('profiles').select('username').eq('id', session.user.id).single();
+  if(!data || !data.username){
+    let chosenName = prompt('Welcome to FOFO! Please choose a unique account name:');
+    if(chosenName===null) return;
+    while(!chosenName || chosenName.trim()===''){
+      chosenName = prompt('Account name cannot be empty. Please choose a unique account name:');
+      if(chosenName===null) return;
+    }
+    const result = await setUsername(chosenName.trim());
+    if(!result.success){ alert(result.error); await checkAndPromptUsername(); }
+    else alert('Account name set successfully!');
+  }
+}
+
+async function updateAccountUI(session){
+  if(!accountBtn) return;
+  if(session && session.user){
+    let displayName = session.user.email ? session.user.email.split('@')[0] : 'Account';
+    const { data } = await supabaseClient.from('profiles').select('username').eq('id', session.user.id).single();
+    if(data && data.username) displayName = data.username;
+    accountBtn.textContent = '👤 ' + displayName;
+    accountBtn.dataset.loggedIn = 'true';
+  } else {
+    accountBtn.textContent = '👤 Sign In';
+    accountBtn.dataset.loggedIn = 'false';
+    if(accountDropdown) accountDropdown.style.display = 'none';
+  }
+}
+
+// Re-renders whatever the player currently has open once sign-in completes,
+// so the "Sign in first" placeholders (Starter Pack box, Combo Sets grid,
+// Sell tab) refresh immediately instead of needing a tab click or reload.
+function refreshShopAfterAuth(){
+  if(mode==='buy'){ refreshStarterPackBox(); if(category) render(); }
+  else if(mode==='sell'){ loadOwnedGear(); }
+}
+
+if(accountBtn){
+  accountBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(!supabaseClient){ alert("Supabase isn't configured yet."); return; }
+    if(accountBtn.dataset.loggedIn==='true'){
+      if(accountDropdown){
+        const isVisible = accountDropdown.style.display === 'block';
+        accountDropdown.style.display = isVisible ? 'none' : 'block';
+      }
+    } else {
+      setAuthMode('signin');
+      showAuthModal();
+    }
+  });
+}
+if(accountDropdown){
+  accountDropdown.addEventListener('click', e=> e.stopPropagation());
+}
+if(signOutBtn){
+  signOutBtn.addEventListener('click', async (e)=>{
+    e.stopPropagation();
+    if(accountDropdown) accountDropdown.style.display = 'none';
+    if(supabaseClient && supabaseClient.auth) await supabaseClient.auth.signOut();
+    for(let i=localStorage.length-1; i>=0; i--){
+      const key = localStorage.key(i);
+      if(key && (key.includes('supabase.auth.token') || key.includes('sb-kgwfzmqswzfdknwneffd-auth-token'))) localStorage.removeItem(key);
+    }
+    updateAccountUI(null);
+  });
+}
+window.addEventListener('click', ()=>{ if(accountDropdown) accountDropdown.style.display = 'none'; });
+
+const authCloseBtn = document.getElementById('authCloseBtn');
+if(authCloseBtn) authCloseBtn.addEventListener('click', hideAuthModal);
+if(authModal) authModal.addEventListener('click', e=>{ if(e.target===authModal) hideAuthModal(); });
+if(authToggleLink){
+  authToggleLink.addEventListener('click', e=>{ e.preventDefault(); setAuthMode(authMode==='signin' ? 'signup' : 'signin'); });
+}
+if(authSubmitBtn){
+  authSubmitBtn.addEventListener('click', async ()=>{
+    if(!supabaseClient) return;
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    authError.style.color = 'var(--bad)';
+    if(!email || !password){ authError.textContent='Enter an email and password.'; return; }
+    authSubmitBtn.disabled = true;
+    try{
+      if(authMode==='signin'){
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if(error) throw error;
+        hideAuthModal();
+      } else {
+        const { error } = await supabaseClient.auth.signUp({ email, password });
+        if(error) throw error;
+        hideAuthModal();
+      }
+    }catch(err){
+      authError.style.color = 'var(--bad)';
+      authError.textContent = err.message || 'Something went wrong.';
+    }
+    authSubmitBtn.disabled = false;
+  });
+}
+if(googleSignInBtn){
+  googleSignInBtn.addEventListener('click', async ()=>{
+    if(!supabaseClient) return;
+    try{
+      const { error } = await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin + window.location.pathname } });
+      if(error) throw error;
+    }catch(err){
+      authError.style.color = 'var(--bad)';
+      authError.textContent = err.message || 'Google sign-in failed.';
+    }
+  });
+}
+
 // ======================= STATE =======================
 let mode = null; // 'buy' | 'sell'
 let category = null; // 'rods_reels' | 'lines' | 'lures'
@@ -344,7 +572,12 @@ function starterPackItems(paid){
     { gear_type:'rod', item_key:'rodl', spec_value:6, purchase_price: paid?125:0, quantity:1 },
     { gear_type:'reel', item_key:'reelbasic', spec_value:null, purchase_price:0, quantity:1 }, // always unsellable — no real market value
     { gear_type:'mono_line', item_key:'linewhite', spec_value:10, purchase_price: paid?10:0, quantity:4 },
-    { gear_type:'lure', item_key:'jiglight', spec_value:0.75, purchase_price: paid?30:0, quantity:1 }
+    // jiglight is a pack of 5 (LURE_CATALOG's packSize) — quantity here is the
+    // number of individual lures actually in inventory, not "1 pack", since
+    // that's what fishOnApplyGearDamage() decrements by 1 on each line break.
+    // A row inserted with quantity:1 made the whole pack vanish after a single
+    // break instead of leaving the other 4 lures behind.
+    { gear_type:'lure', item_key:'jiglight', spec_value:0.75, purchase_price: paid?30:0, quantity: LURE_CATALOG.find(l=>l.key==='jiglight').packSize }
   ];
 }
 // The four images shown together on the Starter Pack card/detail view — rod,
@@ -365,7 +598,17 @@ async function refreshStarterPackBox(){
   const btn = document.getElementById('starterPackBtn');
   const msgEl = document.getElementById('starterPackMsg');
   msgEl.textContent = '';
-  if(!currentUser){ box.style.display='block'; priceEl.textContent = 'Sign in on the main game first'; btn.disabled = true; return; }
+  if(!currentUser){
+    // Most players who land here without an account are trying to do exactly
+    // this — claim the free pack — so make the button itself the sign-in
+    // entry point instead of just telling them to go somewhere else.
+    box.style.display='block';
+    priceEl.textContent = 'FREE (one-time offer) — sign in to claim';
+    btn.disabled = false;
+    btn.textContent = 'Sign In to Claim';
+    btn.dataset.needsAuth = '1';
+    return;
+  }
   const claimed = await starterPackAlreadyClaimed();
   if(claimed){
     // Once claimed, the free box goes away — it now lives in Combo Sets as a
@@ -375,6 +618,7 @@ async function refreshStarterPackBox(){
   }
   box.style.display='block';
   btn.disabled = false;
+  btn.dataset.needsAuth = '0';
   priceEl.textContent = 'FREE (one-time offer)';
   btn.textContent = 'Claim Free Starter Pack';
   btn.dataset.claimed = '0';
@@ -395,8 +639,10 @@ async function purchaseStarterPack(claimed, msgEl){
   return true;
 }
 document.getElementById('starterPackBtn').addEventListener('click', async ()=>{
+  const starterBtn = document.getElementById('starterPackBtn');
+  if(starterBtn.dataset.needsAuth === '1'){ setAuthMode('signin'); showAuthModal(); return; }
   const msgEl = document.getElementById('starterPackMsg');
-  const claimed = document.getElementById('starterPackBtn').dataset.claimed === '1';
+  const claimed = starterBtn.dataset.claimed === '1';
   const ok = await purchaseStarterPack(claimed, msgEl);
   if(ok) refreshStarterPackBox();
 });
@@ -413,7 +659,9 @@ const COMBO_SETS = [
       { gear_type:'rod', item_key:'rodm', spec_value:8, quantity:1, purchase_price:195, img:'rodm.png' },
       { gear_type:'reel', item_key:'reelred', spec_value:null, quantity:1, purchase_price:100, img:'reelred.png' },
       { gear_type:'braid_line', item_key:'linepink', spec_value:30, quantity:4, purchase_price:35, img:'linepink.png' },
-      { gear_type:'lure', item_key:'jiglight', spec_value:3, quantity:1, purchase_price:41.25, img:'jiglight.png' }
+      // quantity is the actual lure count in the pack (packSize), not "1 pack"
+      // — see the same fix/comment on starterPackItems() above.
+      { gear_type:'lure', item_key:'jiglight', spec_value:3, quantity: LURE_CATALOG.find(l=>l.key==='jiglight').packSize, purchase_price:41.25, img:'jiglight.png' }
     ]
   },
   {
@@ -423,7 +671,7 @@ const COMBO_SETS = [
       { gear_type:'rod', item_key:'rodh', spec_value:10, quantity:1, purchase_price:255, img:'rodh.png' },
       { gear_type:'reel', item_key:'reelred', spec_value:null, quantity:1, purchase_price:100, img:'reelred.png' },
       { gear_type:'braid_line', item_key:'lineblue', spec_value:80, quantity:4, purchase_price:75, img:'lineblue.png' },
-      { gear_type:'lure', item_key:'plastic1', spec_value:5, quantity:1, purchase_price:65, img:'plastic1.png' }
+      { gear_type:'lure', item_key:'plastic1', spec_value:5, quantity: LURE_CATALOG.find(l=>l.key==='plastic1').packSize, purchase_price:65, img:'plastic1.png' }
     ]
   }
 ];
@@ -431,7 +679,11 @@ const COMBO_SETS = [
 async function renderComboSetsGrid(){
   const grid = document.getElementById('comboGrid');
   const emptyMsg = document.getElementById('comboEmptyMsg');
-  if(!currentUser){ grid.style.display='none'; emptyMsg.style.display='block'; emptyMsg.textContent='Sign in on the main game first.'; return; }
+  if(!currentUser){
+    grid.style.display='none'; emptyMsg.style.display='block';
+    emptyMsg.innerHTML = 'Sign in to see Combo Sets — <a href="#" onclick="setAuthMode(\'signin\'); showAuthModal(); return false;">Sign In</a>';
+    return;
+  }
   const claimed = await starterPackAlreadyClaimed();
   if(!claimed){
     grid.style.display='none'; emptyMsg.style.display='block';
@@ -691,9 +943,15 @@ function openQtyPrompt(lure, oz, unitPrice){
     document.getElementById('qtyMinus').addEventListener('click', ()=>{ qty=Math.max(1,qty-1); render(); });
     document.getElementById('qtyPlus').addEventListener('click', ()=>{ qty=Math.min(20,qty+1); render(); });
     document.getElementById('qtyAddBtn').addEventListener('click', ()=>{
+      // `qty` here is packs, not individual lures — inventory (and
+      // fishOnApplyGearDamage's per-loss decrement in the main game) tracks
+      // individual lure count, so the stored quantity has to be packs×packSize.
+      // A packSize:1 "individual" lure (hoochie/jigheavy) is unaffected since
+      // that multiplies by 1.
+      const totalLures = qty * (lure.packSize||1);
       addToCart({
-        gearType:'lure', itemKey:lure.key, label:`${lure.key} ${oz}oz x${qty}`, img:lure.img,
-        specValue:oz, lineType:null, price:unitPrice*qty, quantity:qty
+        gearType:'lure', itemKey:lure.key, label:`${lure.key} ${oz}oz — ${qty} pack${qty>1?'s':''} (${totalLures} lures)`, img:lure.img,
+        specValue:oz, lineType:null, price:unitPrice*qty, quantity:totalLures
       });
       closeDetail();
     });
@@ -735,7 +993,11 @@ function renderCart(){
 document.getElementById('checkoutBtn').addEventListener('click', async ()=>{
   const msgEl = document.getElementById('cartMsg');
   if(!cart.length){ msgEl.style.color='var(--bad)'; msgEl.textContent='Cart is empty.'; return; }
-  if(!currentUser){ msgEl.style.color='var(--bad)'; msgEl.textContent='Sign in on the main game first to check out.'; return; }
+  if(!currentUser){
+    msgEl.style.color='var(--bad)';
+    msgEl.innerHTML = 'Sign in to check out — <a href="#" onclick="setAuthMode(\'signin\'); showAuthModal(); return false;">Sign In</a>';
+    return;
+  }
   const total = cart.reduce((s,c)=>s+c.price,0);
   if(total > walletBalance){ msgEl.style.color='var(--bad)'; msgEl.textContent="You don't have enough in your wallet for this."; return; }
 
@@ -854,8 +1116,19 @@ async function sellItem(g, qty, sellPricePerUnit){
   if(!supabaseClient){ return; }
   const user = await loadWallet();
   currentUser = user;
+  await updateAccountUI(user ? { user } : null);
   supabaseClient.auth.onAuthStateChange(async (event, session)=>{
-    if(session && session.user){ currentUser = session.user; await loadWallet(); if(mode==='sell') loadOwnedGear(); }
+    if(session && session.user){
+      currentUser = session.user;
+      await loadWallet();
+      await updateAccountUI(session);
+      if(event==='SIGNED_IN' || event==='INITIAL_SESSION') await checkAndPromptUsername();
+      hideAuthModal();
+      refreshShopAfterAuth();
+    } else {
+      currentUser = null;
+      await updateAccountUI(null);
+    }
   });
 })();
 </script>
