@@ -76,6 +76,19 @@
   .item-card .name{font-size:11.5px; font-weight:700; line-height:1.25; color:#fff;}
   .item-card .price{font-size:11px; color:var(--ok); margin-top:3px; font-weight:700;}
 
+  /* Combo sets show a small row of every included item's art instead of one image */
+  .combo-images{ display:flex; gap:4px; margin-bottom:6px; }
+  .combo-images img{
+    flex:1; min-width:0; height:44px; object-fit:contain; background:rgba(255,255,255,0.06);
+    border-radius:6px; padding:2px;
+    filter: drop-shadow(0 0 2px rgba(255,255,255,0.9));
+  }
+  .detail-card .combo-images{ margin-bottom:10px; }
+  .detail-card .combo-images img{
+    height:80px; padding:4px;
+    filter: drop-shadow(0 0 3px rgba(255,255,255,0.95)) drop-shadow(0 0 8px rgba(255,255,255,0.5));
+  }
+
   #detailOverlay{
     position:fixed; inset:0; z-index:80; background:rgba(0,0,0,0.6);
     display:none; align-items:center; justify-content:center; padding:16px;
@@ -224,6 +237,7 @@ const REEL_CATALOG = [
   { key:'reelgold',       img:'reelgold.png',       price:550, speedBonus:0.40, desc:'Reels 40% faster without losing line strength' }
 ];
 const MONO_LINE_CATALOG = [
+  { key:'linewhite',  img:'linewhite.png',  basePrice:10, baseLb:10, maxLb:30,  addPerLb:1 },
   { key:'lineyellow', img:'lineyellow.png', basePrice:10, baseLb:10, maxLb:30,  addPerLb:1 },
   { key:'linepink',   img:'linepink.png',   basePrice:15, baseLb:20, maxLb:40,  addPerLb:1 },
   { key:'linegreen',  img:'linegreen.png',  basePrice:20, baseLb:30, maxLb:60,  addPerLb:1 },
@@ -329,10 +343,15 @@ function starterPackItems(paid){
   return [
     { gear_type:'rod', item_key:'rodl', spec_value:6, purchase_price: paid?125:0, quantity:1 },
     { gear_type:'reel', item_key:'reelbasic', spec_value:null, purchase_price:0, quantity:1 }, // always unsellable — no real market value
-    { gear_type:'mono_line', item_key:'lineyellow', spec_value:10, purchase_price: paid?10:0, quantity:4 },
+    { gear_type:'mono_line', item_key:'linewhite', spec_value:10, purchase_price: paid?10:0, quantity:4 },
     { gear_type:'lure', item_key:'jiglight', spec_value:0.75, purchase_price: paid?30:0, quantity:1 }
   ];
 }
+// The four images shown together on the Starter Pack card/detail view — rod,
+// reel, line, and lure, matching starterPackItems() above (spec_value 0.75oz
+// there is jiglight's slider default; the card just shows the jig art, not a
+// particular weight).
+function starterPackImages(){ return ['rodl.png','reelblacksilver.png','linewhite.png','jiglight.png']; }
 async function starterPackAlreadyClaimed(){
   if(!supabaseClient || !currentUser) return null; // null = unknown (not signed in)
   const { data } = await supabaseClient.from('FOFO Player Gear').select('id')
@@ -382,6 +401,33 @@ document.getElementById('starterPackBtn').addEventListener('click', async ()=>{
   if(ok) refreshStarterPackBox();
 });
 
+// Fixed-price bundles beyond the Starter Pack — each item carries its own
+// computed purchase_price (using the same per-ft/per-lb/per-step formulas the
+// individual detail screens use) so resale later values each piece fairly,
+// even though the bundle's flat price doesn't have to equal their sum.
+const COMBO_SETS = [
+  {
+    key:'combo_angler', name:'Angler Combo', price:300,
+    desc:'8ft Medium Strength - Moderate Rod, a reel that reels 10% faster, 30lb pink braided line, and a pack of 5x metal jigs (3oz).',
+    items:[
+      { gear_type:'rod', item_key:'rodm', spec_value:8, quantity:1, purchase_price:195, img:'rodm.png' },
+      { gear_type:'reel', item_key:'reelred', spec_value:null, quantity:1, purchase_price:100, img:'reelred.png' },
+      { gear_type:'braid_line', item_key:'linepink', spec_value:30, quantity:4, purchase_price:35, img:'linepink.png' },
+      { gear_type:'lure', item_key:'jiglight', spec_value:3, quantity:1, purchase_price:41.25, img:'jiglight.png' }
+    ]
+  },
+  {
+    key:'combo_pro', name:'Pro Combo', price:500,
+    desc:'10ft Heavy Strength - Fast Rod, a reel that reels 10% faster, 80lb blue braided line, and a pack of 10x plastic jigs (5oz).',
+    items:[
+      { gear_type:'rod', item_key:'rodh', spec_value:10, quantity:1, purchase_price:255, img:'rodh.png' },
+      { gear_type:'reel', item_key:'reelred', spec_value:null, quantity:1, purchase_price:100, img:'reelred.png' },
+      { gear_type:'braid_line', item_key:'lineblue', spec_value:80, quantity:4, purchase_price:75, img:'lineblue.png' },
+      { gear_type:'lure', item_key:'plastic1', spec_value:5, quantity:1, purchase_price:65, img:'plastic1.png' }
+    ]
+  }
+];
+
 async function renderComboSetsGrid(){
   const grid = document.getElementById('comboGrid');
   const emptyMsg = document.getElementById('comboEmptyMsg');
@@ -394,18 +440,27 @@ async function renderComboSetsGrid(){
   }
   grid.style.display=''; emptyMsg.style.display='none';
   grid.innerHTML='';
-  const card = document.createElement('div');
-  card.className = 'item-card';
-  card.innerHTML = `<img src="gear/rodl.png" alt=""><div class="name">Starter Pack</div><div class="price">$200</div>`;
-  card.addEventListener('click', openComboSetDetail);
-  grid.appendChild(card);
+
+  const starterCard = document.createElement('div');
+  starterCard.className = 'item-card';
+  starterCard.innerHTML = `<div class="combo-images">${starterPackImages().map(img=>`<img src="gear/${img}" alt="">`).join('')}</div><div class="name">Starter Pack</div><div class="price">$200</div>`;
+  starterCard.addEventListener('click', openStarterPackDetail);
+  grid.appendChild(starterCard);
+
+  COMBO_SETS.forEach(setDef=>{
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.innerHTML = `<div class="combo-images">${setDef.items.map(it=>`<img src="gear/${it.img}" alt="">`).join('')}</div><div class="name">${setDef.name}</div><div class="price">$${setDef.price}</div>`;
+    card.addEventListener('click', ()=>openComboDetail(setDef));
+    grid.appendChild(card);
+  });
 }
-function openComboSetDetail(){
+function openStarterPackDetail(){
   detailCard.innerHTML = `
     <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
-    <img src="gear/rodl.png" alt="">
+    <div class="combo-images">${starterPackImages().map(img=>`<img src="gear/${img}" alt="">`).join('')}</div>
     <h3>Starter Pack</h3>
-    <div class="desc">The same professionally put-together bundle new anglers get for free: 6ft Light/Slow Rod, basic reel, 10lb mono line, 1x Jig Light pack (5x metal jigs).</div>
+    <div class="desc">The same professionally put-together bundle new anglers get for free: 6ft Light/Slow Rod, basic reel, 10lb white mono line, 1x Jig Light pack (5x metal jigs).</div>
     <div class="detail-price">$200.00</div>
     <button class="detail-buy-btn" id="comboBuyBtn">Buy Combo Set</button>
     <div id="comboMsg" style="font-size:11.5px;text-align:center;margin-top:6px;min-height:14px;"></div>
@@ -416,6 +471,38 @@ function openComboSetDetail(){
     if(ok) setTimeout(closeDetail, 900);
   });
   detailOverlay.classList.add('show');
+}
+function openComboDetail(setDef){
+  detailCard.innerHTML = `
+    <button class="detail-close" onclick="document.getElementById('detailOverlay').classList.remove('show')">×</button>
+    <div class="combo-images">${setDef.items.map(it=>`<img src="gear/${it.img}" alt="">`).join('')}</div>
+    <h3>${setDef.name}</h3>
+    <div class="desc">${setDef.desc}</div>
+    <div class="detail-price">$${setDef.price.toFixed(2)}</div>
+    <button class="detail-buy-btn" id="comboBuyBtn">Buy Combo Set</button>
+    <div id="comboMsg" style="font-size:11.5px;text-align:center;margin-top:6px;min-height:14px;"></div>
+  `;
+  document.getElementById('comboBuyBtn').addEventListener('click', async ()=>{
+    const msgEl = document.getElementById('comboMsg');
+    const ok = await purchaseComboSet(setDef, msgEl);
+    if(ok) setTimeout(closeDetail, 900);
+  });
+  detailOverlay.classList.add('show');
+}
+async function purchaseComboSet(setDef, msgEl){
+  if(!currentUser){ msgEl.style.color='var(--bad)'; msgEl.textContent='Sign in first.'; return false; }
+  if(setDef.price > walletBalance){ msgEl.style.color='var(--bad)'; msgEl.textContent="You don't have enough in your wallet."; return false; }
+  const rows = setDef.items.map(it=>({
+    player_id: currentUser.id, gear_type: it.gear_type, item_key: it.item_key,
+    spec_value: it.spec_value, purchase_price: it.purchase_price, quantity: it.quantity
+  }));
+  const { error } = await supabaseClient.from('FOFO Player Gear').insert(rows);
+  if(error){ msgEl.style.color='var(--bad)'; msgEl.textContent='Something went wrong — try again.'; console.error(error.message); return false; }
+  walletBalance -= setDef.price;
+  await saveWallet(currentUser.id);
+  updateWalletUI();
+  msgEl.style.color='var(--ok)'; msgEl.textContent = setDef.name+' purchased!';
+  return true;
 }
 
 function catalogLookup(gearType, key){
@@ -677,7 +764,7 @@ document.getElementById('confirmBackToFishingBtn').addEventListener('click', ()=
 });
 
 // ======================= SELL =======================
-const STARTER_ITEM_IMAGES = { reelbasic: 'reelred.png' }; // visual stand-in only — reelbasic isn't a purchasable catalog item
+const STARTER_ITEM_IMAGES = { reelbasic: 'reelblacksilver.png' }; // visual stand-in only — reelbasic isn't a purchasable catalog item
 
 function renderSell(){
   let filtered = [];
