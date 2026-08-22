@@ -1409,6 +1409,7 @@
   // map feels like a genuinely different spot rather than just a new seafloor.
   let MOUNTAINS = [];
   let TERRAIN_SPECKLES = [];
+  let SHORE_SPECKLES = [];
   let SEAWEED = [];
   let BOATS = [];
 
@@ -1422,6 +1423,19 @@
     for(let i=0;i<90;i++){
       TERRAIN_SPECKLES.push({
         xFrac: Math.random(), dFrac: 0.08+Math.random()*0.85,
+        r: 0.6+Math.random()*1.8, shade: Math.random()
+      });
+    }
+  }
+  // Same speckle look as the underwater seafloor (regenerateTerrainSpeckles
+  // above), but positioned within the dry-shore strip so the beach reads as
+  // the same ground material continuing up out of the water rather than a
+  // flat, textureless patch next to a textured one.
+  function regenerateShoreSpeckles(){
+    SHORE_SPECKLES = [];
+    for(let i=0;i<35;i++){
+      SHORE_SPECKLES.push({
+        xFrac: Math.random(), dFrac: 0.1+Math.random()*0.8,
         r: 0.6+Math.random()*1.8, shade: Math.random()
       });
     }
@@ -1440,16 +1454,26 @@
       });
     }
   }
+  // Varied hull colors (was 3 near-identical dark browns — read as a uniform
+  // little tug fleet) plus a 'console' silhouette (low open sport-fishing
+  // boat with a small console and angled rod-holder lines, closer to the
+  // real charter-boat photos Kris referenced) mixed in alongside the
+  // original cabin-cruiser silhouette, so the fleet doesn't look like one
+  // boat repeated.
+  const BOAT_HULLS = ['#e8e4da','#c9d3da','#2b3a4a','#7a2020','#1f2d1f','#d9d9d9','#264653','#3a2e26','#8a1f1f'];
+  const BOAT_ACCENTS = ['#1a1a1a','#c0392b','#2c3e50','#e0e0e0','#0b6e4f','#f2f2f2'];
   function regenerateBoats(){
     BOATS = [];
     const n = 2 + Math.floor(Math.random()*4); // 2-5 boats, decorative — signals "fish are working this water"
     for(let i=0;i<n;i++){
       BOATS.push({
         xFrac: 0.15 + Math.random()*0.8,
-        vx: (Math.random()<0.5?-1:1)*(0.002+Math.random()*0.004),
+        vx: (Math.random()<0.5?-1:1)*(0.0004+Math.random()*0.0008), // slow, barely-perceptible drift — was 5x faster and read as distracting
         bobPhase: Math.random()*Math.PI*2,
         scale: 0.75+Math.random()*0.6,
-        hull: ['#2b2320','#3a2e26','#242a30'][Math.floor(Math.random()*3)]
+        kind: Math.random()<0.55 ? 'console' : 'cruiser',
+        hull: BOAT_HULLS[Math.floor(Math.random()*BOAT_HULLS.length)],
+        accent: BOAT_ACCENTS[Math.floor(Math.random()*BOAT_ACCENTS.length)]
       });
     }
   }
@@ -1459,7 +1483,7 @@
       if(b.xFrac<0.08 || b.xFrac>0.97){ b.vx=-b.vx; b.xFrac=Math.max(0.08,Math.min(0.97,b.xFrac)); }
     }
   }
-  regenerateMountains(); regenerateTerrainSpeckles(); regenerateSeaweed(); regenerateBoats();
+  regenerateMountains(); regenerateTerrainSpeckles(); regenerateShoreSpeckles(); regenerateSeaweed(); regenerateBoats();
 
   // ---------------- Fish data (from FishOn_Data_Set.xlsx) ----------------
   // pctLow/pctHigh = "preferred depth %" applied to the LOCAL water depth at the
@@ -2401,6 +2425,7 @@ window.loadUserCatches = async function loadUserCatches() {
     VIEW_DEPTH_FT = TERRAIN[TERRAIN.length-1][1] + 50;
     regenerateMountains();
     regenerateTerrainSpeckles();
+    regenerateShoreSpeckles();
     regenerateSeaweed();
     regenerateBoats();
     regenerateAmbientFish();
@@ -2791,24 +2816,46 @@ window.loadUserCatches = async function loadUserCatches() {
   }
   // A real strip of dry shore (instead of the seafloor just starting at the
   // canvas edge) so the angler has solid ground to stand on rather than
-  // appearing to float at the waterline. Tapers from a small beach rise at the
-  // left edge down to meet the seafloor's own starting depth exactly at
-  // shoreX, so there's no visible seam between this and the terrain fill.
+  // appearing to float at the waterline. FLAT at shoreGroundY all the way
+  // from the left edge to just short of shoreX (bankX) — that flat run is
+  // deliberately wide enough to contain the angler's actual standing
+  // position (his feet land a bit left of shoreX; see drawAngler/drawScene),
+  // so his feet sit exactly on this surface instead of floating above a
+  // ground line that had already sloped downward by the time it reached him.
+  // Only the last few px before shoreX dip down to meet the seafloor's own
+  // starting depth, so there's still no visible seam with the terrain fill.
   function drawShoreLand(w, surfaceY, floorY, shoreGroundY){
     const shoreX = w*SHORE_FRAC;
     const terrainStartY = surfaceY + (TERRAIN[0][1]/VIEW_DEPTH_FT)*(floorY-surfaceY);
+    const bankX = Math.max(0, shoreX-6);
     const path = new Path2D();
-    path.moveTo(0, shoreGroundY-4);
+    path.moveTo(0, shoreGroundY);
+    path.lineTo(bankX, shoreGroundY);
     path.lineTo(shoreX, terrainStartY);
     path.lineTo(shoreX, floorY);
     path.lineTo(0, floorY);
     path.closePath();
-    let g = ctx.createLinearGradient(0, shoreGroundY-4, 0, floorY);
-    g.addColorStop(0,'#8a7a5c'); g.addColorStop(0.15,'#a8916d'); g.addColorStop(0.5,'#8a7355'); g.addColorStop(1,'#5c4a38');
+    let g = ctx.createLinearGradient(0, shoreGroundY, 0, floorY);
+    g.addColorStop(0,'#a8916d'); g.addColorStop(0.5,'#8a7355'); g.addColorStop(1,'#5c4a38');
     ctx.fillStyle = g; ctx.fill(path);
+
+    // texture speckles, same look/density style as the underwater seafloor's
+    // TERRAIN_SPECKLES, clipped to this same shape so the dry ground and the
+    // seafloor read as one continuous material rather than two different ones.
+    ctx.save();
+    ctx.clip(path);
+    for(const sp of SHORE_SPECKLES){
+      const x = sp.xFrac*shoreX;
+      const topY = x<=bankX ? shoreGroundY : shoreGroundY+((x-bankX)/(shoreX-bankX))*(terrainStartY-shoreGroundY);
+      const y = topY + sp.dFrac*(floorY-topY);
+      ctx.fillStyle = sp.shade>0.5 ? 'rgba(60,45,30,0.35)' : 'rgba(220,200,160,0.25)';
+      ctx.beginPath(); ctx.ellipse(x,y,sp.r*1.6,sp.r,0,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
     // waterline foam where the beach meets the sea
     ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, shoreGroundY-3); ctx.lineTo(shoreX, terrainStartY-1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, shoreGroundY-1); ctx.lineTo(bankX, shoreGroundY-1); ctx.lineTo(shoreX, terrainStartY-1); ctx.stroke();
   }
   // Simple standing angler figure at the casting spot — replaces the old
   // near-shore rock outcrop (too crystal/gem-like at this size, per Kris) and
@@ -2871,11 +2918,27 @@ window.loadUserCatches = async function loadUserCatches() {
     ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
     ctx.fillStyle = 'rgba(10,15,20,0.18)';
     ctx.beginPath(); ctx.ellipse(0, 6, 11, 3, 0, 0, Math.PI*2); ctx.fill(); // reflection
+
+    // hull — shared by both silhouettes, colored per-boat
     ctx.fillStyle = b.hull;
     ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(10,0); ctx.lineTo(7,4); ctx.lineTo(-7,4); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#e8e2d4'; ctx.fillRect(-3,-6,7,6); // cabin
-    ctx.strokeStyle = b.hull; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(4,-6); ctx.lineTo(4,-11); ctx.stroke(); // mast/antenna
+    ctx.strokeStyle = b.accent; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(-9,1.6); ctx.lineTo(9,1.6); ctx.stroke(); // waterline accent stripe
+
+    if(b.kind === 'cruiser'){
+      ctx.fillStyle = '#e8e2d4'; ctx.fillRect(-3,-6,7,6); // cabin
+      ctx.strokeStyle = b.accent; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(4,-6); ctx.lineTo(4,-11); ctx.stroke(); // mast/antenna
+    } else {
+      // open sport-fishing console: small offset console block plus a couple
+      // of angled rod-holder/outrigger lines, modeled on the charter-boat
+      // reference photos rather than the old boxy tug-style cabin.
+      ctx.fillStyle = b.accent;
+      ctx.fillRect(-1,-4,4,4); // low console
+      ctx.strokeStyle = 'rgba(160,160,160,0.85)'; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(1,-4); ctx.lineTo(-6,-13); ctx.stroke(); // rod/outrigger 1
+      ctx.beginPath(); ctx.moveTo(2,-4); ctx.lineTo(7,-14); ctx.stroke(); // rod/outrigger 2
+    }
     ctx.restore();
   }
 
@@ -2895,7 +2958,7 @@ window.loadUserCatches = async function loadUserCatches() {
     // Starts at shoreX (not the canvas edge) — drawShoreLand() below fills the
     // dry strip to its left, so the two meet with no seam.
     const shoreX = w*SHORE_FRAC;
-    const shoreGroundY = surfaceY - 10; // small beach rise the angler stands on
+    const shoreGroundY = surfaceY - 5; // small beach rise the angler stands on (lowered so he reads as grounded, not elevated)
     const terrainPath = new Path2D();
     terrainPath.moveTo(distToPx(0,w), surfaceY+(TERRAIN[0][1]/VIEW_DEPTH_FT)*(floorY-surfaceY));
     TERRAIN.forEach(([p,d])=>{
@@ -2951,16 +3014,25 @@ window.loadUserCatches = async function loadUserCatches() {
     }
 
     // water-surface texture: a gentle wave line plus sun-glitter flecks
-    // (confined to shoreX..w — the water, not the beach to its left)
+    // (confined to shoreX..w — the water, not the beach to its left).
+    // Both are driven by the same currentDirection/currentSpeedFtPerSec the
+    // physics uses to drag the lure (rolled every 5min by rollCurrent()), so
+    // the visible surface motion always matches which way the water's
+    // actually moving instead of animating on its own fixed schedule.
+    const waveK = 0.05;
+    const wavePxPerSec = currentDirection * currentSpeedFtPerSec * 25; // crest travel speed/direction
     ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1;
     ctx.beginPath();
     for(let x=shoreX;x<=w;x+=8){
-      const y = surfaceY + Math.sin(x*0.05+nowSec*1.4)*1.4;
+      const y = surfaceY + Math.sin(x*waveK - waveK*wavePxPerSec*nowSec)*1.4;
       if(x===shoreX) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
     ctx.stroke();
+    const glitterPxPerSec = currentDirection * currentSpeedFtPerSec * 35;
+    const glitterSpan = w - shoreX;
     for(let i=0;i<14;i++){
-      const sx = shoreX + (i*73 + nowSec*40)%(w-shoreX);
+      const raw = (i*73 + glitterPxPerSec*nowSec) % glitterSpan;
+      const sx = shoreX + (raw<0 ? raw+glitterSpan : raw);
       const flick = 0.15+0.35*Math.abs(Math.sin(nowSec*3+i));
       ctx.strokeStyle = `rgba(255,255,255,${flick.toFixed(2)})`;
       ctx.beginPath(); ctx.moveTo(sx, surfaceY+2); ctx.lineTo(sx+5, surfaceY+2); ctx.stroke();
