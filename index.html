@@ -1170,6 +1170,29 @@
     }
   }
 
+  // Live countdown in the same banner the reeling script (a separate closure)
+  // uses for "FISH ON!!" — reused via window.fishOnShowBanner/HideBanner since
+  // showFishOnBanner()'s DOM element and helpers live over there.
+  let countdownInterval=null, countdownVal=0;
+  function startCastCountdown(){
+    stopCastCountdown();
+    countdownVal = Math.round(CAST_WINDOW_MS/1000);
+    if(window.fishOnShowBanner) window.fishOnShowBanner(String(countdownVal), true);
+    countdownInterval = setInterval(()=>{
+      countdownVal--;
+      // Safety net only — cancelCastWindow()'s own castWindowTimer fires at
+      // the same ~5000ms mark and normally hides the banner first.
+      if(countdownVal<=0){ stopCastCountdown(true); return; }
+      if(window.fishOnShowBanner) window.fishOnShowBanner(String(countdownVal), true);
+    }, 1000);
+  }
+  // hide=false leaves whatever's currently on the banner alone (used right
+  // before finalizeCast swaps it to "Good Cast!"); hide=true clears it (used
+  // when the attempt fizzles — timeout or a too-weak manual release).
+  function stopCastCountdown(hide){
+    clearInterval(countdownInterval); countdownInterval=null;
+    if(hide && window.fishOnHideBanner) window.fishOnHideBanner();
+  }
   window.fishOnArmCast = function(){
     if(casting || window.fishOnIsCastActive()) return;
     armed=true; peak=0; recentSamples=[]; emaMag=0; burstDetectedAt=null;
@@ -1177,6 +1200,7 @@
     peakReadout.textContent='0.0 m/s²';
     clearTimeout(castWindowTimer);
     castWindowTimer = setTimeout(cancelCastWindow, CAST_WINDOW_MS);
+    startCastCountdown();
   };
   // Locks in whatever peak has been captured so far and casts (if it clears
   // the minimum) — called automatically once a release burst is confirmed,
@@ -1187,8 +1211,14 @@
     clearTimeout(castWindowTimer); castWindowTimer=null;
     clearTimeout(burstConfirmTimer); burstConfirmTimer=null;
     window.fishOnCastControl.bailHeld=false;
-    if(peak>4){ casting=true; doCast(peak); }
-    else if(window.fishOnCancelCastArm){ window.fishOnCancelCastArm(); }
+    if(peak>4){
+      stopCastCountdown(false);
+      if(window.fishOnShowBanner) window.fishOnShowBanner('Good Cast!');
+      casting=true; doCast(peak);
+    } else {
+      stopCastCountdown(true);
+      if(window.fishOnCancelCastArm){ window.fishOnCancelCastArm(); }
+    }
   }
   // The 5s window ran out with no release detected — abandon the attempt
   // rather than casting on a stale/near-zero peak.
@@ -1196,6 +1226,7 @@
     if(!armed) return;
     armed=false;
     clearTimeout(burstConfirmTimer); burstConfirmTimer=null;
+    stopCastCountdown(true);
     window.fishOnCastControl.bailHeld=false;
     if(window.fishOnCancelCastArm) window.fishOnCancelCastArm();
   }
@@ -1789,14 +1820,29 @@
     }
     return base+" Your line can handle this one — reel it in.";
   }
-  function showFishOnBanner(text){
+  // persist=true leaves the banner up until hideFishOnBanner() is called
+  // explicitly (used for the live cast countdown) instead of auto-hiding —
+  // every other caller (fish-on, predator-strike, "Good Cast!") wants the
+  // normal brief flash and can omit the second argument.
+  function showFishOnBanner(text, persist){
     const el=document.getElementById('fishOnBanner');
     const msg = text || 'FISH ON!!';
+    clearTimeout(fishOnBannerHideTimer);
     el.textContent = msg;
     el.classList.toggle('long', msg.length>14);
     el.classList.add('show');
-    setTimeout(()=>el.classList.remove('show'), 1000);
+    if(!persist){
+      fishOnBannerHideTimer = setTimeout(()=>el.classList.remove('show'), 1000);
+    }
   }
+  function hideFishOnBanner(){
+    clearTimeout(fishOnBannerHideTimer);
+    document.getElementById('fishOnBanner').classList.remove('show');
+  }
+  // Exposed so the casting script (a separate closure — see CASTING SCRIPT)
+  // can drive the same banner for the tap-to-arm cast countdown.
+  window.fishOnShowBanner = showFishOnBanner;
+  window.fishOnHideBanner = hideFishOnBanner;
   function showCatchPopup(visualNode, textHtml, cls, ms){
     const el=document.getElementById('catchPopup');
     el.innerHTML='';
@@ -2422,6 +2468,7 @@ window.loadUserCatches = async function loadUserCatches() {
   // into "ready to cast". Cleared by fullReset().
   let justLandedFish = false;
   window.fishOnIsCastActive = function(){ return castActive; };
+  let fishOnBannerHideTimer = null;
   // Live physics snapshot for the tutorial module (a separate closure) — read
   // fresh on every call so hints can react to the actual current moment of a
   // cast (lure in the air vs. sinking vs. on the bottom vs. fish on) instead
