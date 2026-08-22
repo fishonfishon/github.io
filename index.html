@@ -121,19 +121,19 @@
   }
   #tutorialToggleBtn[aria-pressed="true"]{ background:var(--accent); border-color:#8a4324; color:#1a1210; }
 
-  #tutorialBanner{
-    position:fixed; left:50%; top:52px; transform:translateX(-50%);
-    z-index:92; max-width:min(92vw,420px); width:92vw;
-    background:rgba(20,16,12,0.94); border:2px solid var(--accent); border-radius:12px;
-    padding:10px 14px; box-shadow:0 6px 18px rgba(0,0,0,0.5);
-    display:none; align-items:center; justify-content:space-between; gap:10px;
+  /* Tutorial hints now live inside the coach's status box (#reelStatus) itself
+     instead of a floating banner — see .status-wrap / #tutorialCloseBtn below
+     and the .status.tutorial-glow rule further down. */
+  .status-wrap{ position:relative; }
+  #tutorialCloseBtn{
+    position:absolute; top:16px; right:24px; z-index:10;
+    width:22px; height:22px; padding:0; border-radius:50%;
+    border:1px solid var(--line); background:rgba(0,0,0,0.4); color:var(--paper);
+    font-size:14px; line-height:1; cursor:pointer;
+    display:none; align-items:center; justify-content:center;
   }
-  #tutorialBanner.show{ display:flex; }
-  #tutorialStepText{ font-size:12.5px; line-height:1.4; color:var(--paper); }
-  #tutorialSkipBtn{
-    flex:0 0 auto; background:none; border:1px solid var(--line); border-radius:7px;
-    color:#c7d0d0; font-size:10.5px; padding:6px 8px; cursor:pointer; white-space:nowrap;
-  }
+  #tutorialCloseBtn.show{ display:flex; }
+  .status.tutorial-glow{ padding-right:34px; height:auto; min-height:58px; overflow:visible; }
 
   .tutorial-glow{
     position:relative; z-index:60;
@@ -369,6 +369,7 @@
     grid-template-columns: 2.2fr 1fr;
     grid-template-areas:
       "title     gear"
+      "tutbtn    gear"
       "reelstat  gear"
       "canvas    bail"
       "canvas    wheel"
@@ -378,7 +379,7 @@
       "reeldbg   autopanel"
       "resetrow  autopanel"
       "legal     legal";
-    grid-template-rows: auto auto minmax(140px,1fr) auto auto auto auto auto auto auto;
+    grid-template-rows: auto auto auto minmax(140px,1fr) auto auto auto auto auto auto auto;
     column-gap:10px; row-gap:6px;
     max-width:1080px; margin:0 auto; padding:10px 10px 16px;
     max-height:none;
@@ -387,9 +388,10 @@
   #screenCast.wrap > header h1{ font-size:13px; }
   #screenCast.wrap > header p{ font-size:11px; }
   #screenCast.wrap > .panel{ grid-area:gear; border:none; padding:0; }
+  #tutorialToggleBtn{ grid-area:tutbtn; width:auto; max-width:280px; margin:2px 0 0; padding:7px 12px; }
   #reelScene{ grid-area:canvas; width:100%; height:100%; align-self:stretch; }
   .readouts{ grid-area:readouts; margin:8px 0 0; }
-  #reelStatus{ grid-area:reelstat; margin:6px 0 0; }
+  #reelStatusWrap{ grid-area:reelstat; margin:6px 0 0; }
   #bailRigArea{ grid-area:bail; padding:6px 0 0; }
   #wheelRigArea{ grid-area:wheel; padding:0; }
   #iceboxWrap{ grid-area:icebox; margin:8px 0 0; }
@@ -406,10 +408,6 @@
 <body>
 
 <div id="hapticFlash"></div>
-<div id="tutorialBanner">
-  <div id="tutorialStepText"></div>
-  <button id="tutorialSkipBtn">Skip step ▶</button>
-</div>
 <div id="accountContainer" style="position: fixed; top: 8px; left: 8px; z-index: 90;">
   <button id="accountBtn" aria-label="Account">👤 Sign In</button>
   <div id="accountDropdown" style="display: none; position: absolute; left: 0; top: 100%; margin-top: 5px; background: #1a1a1a; border: 1px solid #333; padding: 8px; border-radius: 6px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
@@ -544,7 +542,10 @@
     <div class="ro"><div class="v" id="roCurrent">→0.0</div><div class="l">Current ft/s</div></div>
   </div>
 
-  <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear and to cast hold down the cast button and flick your phone away from you like you would with a real fishing rod and then let go of the cast button!</div>
+  <div class="status-wrap" id="reelStatusWrap">
+    <div class="status" id="reelStatus">First enable motion, haptics, and sound to bring out the realism of this simulator! Choose your gear and to cast hold down the cast button and flick your phone away from you like you would with a real fishing rod and then let go of the cast button!</div>
+    <button id="tutorialCloseBtn" aria-label="Turn off tutorial hints" title="Turn off tutorial hints">×</button>
+  </div>
 
   <div class="rig-area" id="bailRigArea">
     <div class="bail-stack">
@@ -1064,80 +1065,15 @@
       if(noGearMsg) noGearMsg.style.display = (data && data.length) ? 'none' : 'block';
       const equipped = await loadEquippedGear(session.user.id);
       populateGearDropdowns(equipped);
+      window.fishOnTutorialEvent && window.fishOnTutorialEvent('gear_owned_changed');
     })();
     gearLoadPromise.finally(()=>{ gearLoadPromise = null; });
     return gearLoadPromise;
   };
 
-  // ======================= TUTORIAL =======================
-  (function(){
-    const STEPS = [
-      { text:'🎣 Step 1 of 7: Pick your gear! Choose a rod, reel, line, and lure from the dropdowns below.', target:'#gearPanel', event:'gear_selected', timeoutMs:9000 },
-      { text:'🎣 Step 2 of 7: Hold the CAST button, whip your phone forward like a real cast, then let go!', target:'#castBtn', event:'cast_performed', timeoutMs:20000 },
-      { text:'🎣 Step 3 of 7: Turn the reel wheel to bring your line in.', target:'#reelWheel', event:'reeling_performed', timeoutMs:15000 },
-      { text:'🎣 Step 4 of 7: Try Reel Sensitivity — Slow reels in strong fish more safely, Fast brings an outmatched fish in quicker.', target:'#sensSeg', event:'sensitivity_changed', timeoutMs:9000 },
-      { text:'🎣 Step 5 of 7: Got a fish on? Keep reeling to land it!', target:'#reelWheel', event:'fish_landed', timeoutMs:60000 },
-      { text:'🎣 Step 6 of 7: Open your icebox and sell your catch for some cash!', target:'#iceboxWrap', event:'fish_sold', timeoutMs:20000 },
-      { text:'🎣 Step 7 of 7: Now try Auto Cast and Jig — no phone motion needed. Then we loop back to the start!', target:'#castControlsRow', event:'auto_cast_used', timeoutMs:20000 },
-    ];
-    let enabled = false, stepIndex = 0, currentGlowEl = null, stepTimer = null;
-    const banner = document.getElementById('tutorialBanner');
-    const stepTextEl = document.getElementById('tutorialStepText');
-    const toggleBtn = document.getElementById('tutorialToggleBtn');
-    const toggleState = document.getElementById('tutorialToggleState');
-
-    function clearGlow(){
-      if(currentGlowEl){ currentGlowEl.classList.remove('tutorial-glow'); currentGlowEl=null; }
-    }
-    function showStep(i){
-      clearTimeout(stepTimer);
-      stepIndex = i % STEPS.length;
-      const step = STEPS[stepIndex];
-      clearGlow();
-      stepTextEl.textContent = step.text;
-      const el = document.querySelector(step.target);
-      if(el){ el.classList.add('tutorial-glow'); currentGlowEl = el; }
-      if(step.timeoutMs){ stepTimer = setTimeout(()=>advance(step.event), step.timeoutMs); }
-    }
-    function advance(eventName){
-      if(!enabled) return;
-      const step = STEPS[stepIndex];
-      if(eventName && step.event !== eventName) return; // wrong event for this step, ignore
-      showStep(stepIndex+1);
-    }
-    window.fishOnTutorialEvent = function(eventName){ advance(eventName); };
-
-    function setEnabled(v){
-      enabled = v;
-      toggleBtn.setAttribute('aria-pressed', v?'true':'false');
-      toggleState.textContent = v?'On':'Off';
-      if(v){ banner.classList.add('show'); showStep(0); }
-      else { banner.classList.remove('show'); clearTimeout(stepTimer); clearGlow(); }
-    }
-    async function saveTutorialPref(v){
-      const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
-      if(!client) return;
-      const { data:{session} } = await client.auth.getSession();
-      if(!session || !session.user) return;
-      try{ await client.from('profiles').update({ tutorial_enabled:v }).eq('id', session.user.id); }
-      catch(err){ console.error('Failed to save tutorial preference:', err); }
-    }
-    toggleBtn.addEventListener('click', ()=>{ setEnabled(!enabled); saveTutorialPref(enabled); });
-    document.getElementById('tutorialSkipBtn').addEventListener('click', ()=>advance(null));
-
-    window.fishOnLoadTutorialPref = async function(){
-      const client = window.supabaseClient || (typeof supabaseClient!=='undefined'?supabaseClient:null);
-      if(!client) return;
-      const { data:{session} } = await client.auth.getSession();
-      if(!session || !session.user) return;
-      try{
-        const { data } = await client.from('profiles').select('tutorial_enabled').eq('id', session.user.id).maybeSingle();
-        // No row / null value defaults to ON — matches "brand new users get the tutorial automatically."
-        const pref = (data && data.tutorial_enabled===false) ? false : true;
-        setEnabled(pref);
-      }catch(err){ console.error('Failed to load tutorial preference:', err); }
-    };
-  })();
+  // Tutorial system now lives in its own module near the end of the page (after
+  // auth/gear/icebox are all wired up) — see "ADAPTIVE TUTORIAL" below. It reads
+  // live game state instead of stepping through a fixed, timer-advanced list.
 
   // A line break costs the lure that was in use (gone entirely) and one of
   // the line's 4 charges (25% each) — after 4 breaks, that spool is used up
@@ -1379,7 +1315,7 @@
     reelScreen.querySelector('.transfer-badge'),
     document.getElementById('reelScene'),
     reelScreen.querySelector('.readouts'),
-    document.getElementById('reelStatus'),
+    document.getElementById('reelStatusWrap'),
     document.getElementById('reelBailBtn').closest('.rig-area'),
     document.getElementById('reelWheel').closest('.rig-area'),
     document.getElementById('castControlsRow'),
@@ -1644,6 +1580,7 @@
     showFishOnBanner('FISH ON!!');
     setStatus(coachHookMessage(weight), 'ok');
     updateBailVisual();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('fish_hooked');
 
     clearInterval(fightHapticTimer);
     fightHapticTimer = setInterval(()=>{
@@ -1663,6 +1600,7 @@
     showFishOnBanner('YOUR CATCH HOOKED ON A BIGGER FISH!');
     setStatus(coachHookMessage(weight, true), 'ok');
     updateBailVisual();
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('fish_hooked');
 
     clearInterval(fightHapticTimer);
     fightHapticTimer = setInterval(()=>{
@@ -2315,7 +2253,15 @@ window.loadUserCatches = async function loadUserCatches() {
   releaseFishBtn.addEventListener('click', fullReset);
   const transferInfo=document.getElementById('rTransferInfo');
 
-  function setStatus(t,cls){ statusEl.textContent='Coach: '+t; statusEl.className='status'+(cls?' '+cls:''); }
+  function setStatus(t,cls){
+    statusEl.textContent='Coach: '+t;
+    statusEl.className='status'+(cls?' '+cls:'');
+    // Real gameplay feedback just overwrote the coach box — if that wasn't the
+    // tutorial system writing (it flags itself while it writes), the tutorial
+    // glow is now stale/misleading, so drop it. The tutorial re-asserts itself
+    // at the next relevant game-state hook rather than fighting to stay shown.
+    if(!window.__fishOnTutorialWriting && window.fishOnTutorialNotifyRealStatus) window.fishOnTutorialNotifyRealStatus();
+  }
   window.fishOnSetStatus = setStatus;
   function updateReadouts(){
     roDepth.textContent=depthFt.toFixed(0)+' ft';
@@ -2832,6 +2778,7 @@ window.loadUserCatches = async function loadUserCatches() {
     const opening = !wrap.classList.contains('open');
     wrap.classList.toggle('open');
     if(opening) window.fishOnSound.lidOpen(); else window.fishOnSound.lidClose();
+    if(opening) window.fishOnTutorialEvent && window.fishOnTutorialEvent('icebox_opened');
   });
 
   // Browsers block audio entirely until a real user gesture — there's no way
@@ -2872,6 +2819,10 @@ window.loadUserCatches = async function loadUserCatches() {
     let mag=Math.sqrt(x*x+y*y+z*z);
     if(!e.acceleration || e.acceleration.x===null) mag=Math.max(0,mag-9.8);
     dbgAccel.textContent='accel: '+mag.toFixed(1);
+    // Signal for the tutorial's "looks like you're on a desktop" detector — a
+    // real non-null sample means whatever device this is really is reporting
+    // motion, so the tutorial shouldn't second-guess it.
+    if(mag>0.5) window.__fishOnGotMotionSample = true;
     tryJig(mag);
   });
 })();
@@ -3015,6 +2966,7 @@ window.loadUserCatches = async function loadUserCatches() {
       accountBtn.dataset.loggedIn = 'false';
       if(accountDropdown) accountDropdown.style.display = 'none';
     }
+    window.fishOnTutorialEvent && window.fishOnTutorialEvent('auth_changed');
   }
 
   // Handle main button click: Toggle dropdown if logged in, show modal if logged out
@@ -3181,6 +3133,212 @@ if(supabaseClient){
     updateAccountUI(null);
   }
 })(); // <--- Ends your IIFE (Immediately Invoked Function Expression)
+
+// ======================= ADAPTIVE TUTORIAL =======================
+// Hints render inside the coach's status box (#reelStatus) instead of a
+// floating banner, and the box glows while a hint is showing. Nothing here
+// runs on a timer to advance content between steps — every hint is picked
+// fresh from live game state (signed in? gear owned? cast attempted? fish on?
+// icebox open? etc.) each time something relevant happens, so a player who
+// skips around gets whatever's actually useful right now rather than being
+// marched through a fixed order. The one timer in this module (the desktop
+// "no motion sensor" check) is a one-shot reaction to the user holding the
+// cast button, not a step-pacing timer.
+(function(){
+  const toggleBtn = document.getElementById('tutorialToggleBtn');
+  const toggleState = document.getElementById('tutorialToggleState');
+  const closeBtn = document.getElementById('tutorialCloseBtn');
+  const statusEl = document.getElementById('reelStatus');
+  if(!toggleBtn || !statusEl || !closeBtn) return;
+
+  let enabled = true; // guests default ON; sign-in loads their saved preference below
+  let currentGlowEl = null;
+  let currentHintKey = null;
+
+  const flags = {
+    gearSelected:false, cast:false, reeled:false, sensitivity:false,
+    landed:false, sold:false, autoCast:false, iceboxOpened:false,
+    hooked:false, noMotion:false
+  };
+
+  function clearGlow(){
+    if(currentGlowEl){ currentGlowEl.classList.remove('tutorial-glow'); currentGlowEl=null; }
+    statusEl.classList.remove('tutorial-glow');
+    closeBtn.classList.remove('show');
+  }
+  function applyGlow(selector){
+    if(currentGlowEl){ currentGlowEl.classList.remove('tutorial-glow'); currentGlowEl=null; }
+    statusEl.classList.add('tutorial-glow');
+    closeBtn.classList.add('show');
+    if(selector){
+      const el = document.querySelector(selector);
+      if(el && el!==statusEl){ el.classList.add('tutorial-glow'); currentGlowEl = el; }
+    }
+  }
+  // Every tutorial message goes through the SAME setStatus the rest of the
+  // game uses (so it really is "in the coach's box," Coach: prefix and all) —
+  // this flag just stops that write from immediately clearing our own glow.
+  function say(text, target){
+    window.__fishOnTutorialWriting = true;
+    if(window.fishOnSetStatus) window.fishOnSetStatus(text, '');
+    window.__fishOnTutorialWriting = false;
+    applyGlow(target);
+  }
+
+  function getState(){
+    const accountBtn = document.getElementById('accountBtn');
+    const signedIn = !!(accountBtn && accountBtn.dataset.loggedIn === 'true');
+    const noGearMsg = document.getElementById('noGearMsg');
+    const hasNoGear = !!(noGearMsg && noGearMsg.style.display !== 'none');
+    const rodSel = document.getElementById('rodSelect'), reelSel = document.getElementById('reelSelect');
+    const lineSel = document.getElementById('lineSelect'), lureSel = document.getElementById('lureSelect');
+    const gearIncomplete = [rodSel,reelSel,lineSel,lureSel].some(el=> !el || el.value==='');
+    const iceboxWrap = document.getElementById('iceboxWrap');
+    const iceboxOpen = !!(iceboxWrap && iceboxWrap.classList.contains('open'));
+    const iceboxCountEl = document.getElementById('iceboxCount');
+    const iceboxCount = iceboxCountEl ? (parseInt((iceboxCountEl.textContent||'').replace(/\D/g,''),10)||0) : 0;
+    return { signedIn, hasNoGear, gearIncomplete, iceboxOpen, iceboxCount };
+  }
+
+  // Priority order — first matching rule wins. Sign-in and owning gear are
+  // real prerequisites, so they always outrank everything else.
+  const HINTS = [
+    { key:'signin', test:s=> !s.signedIn,
+      text:"Sign in first — tap the 👤 button, top left, with email or Google. That's what saves your gear, wallet, and catches.",
+      target:'#accountBtn' },
+    { key:'no_gear', test:s=> s.signedIn && s.hasNoGear,
+      text:"You don't own any gear yet — tap the FOFO Gear Shop sign below and grab the free Starter Pack.",
+      target:'#gearShopSign' },
+    { key:'no_motion', test:()=> flags.noMotion && !flags.cast,
+      text:"No phone motion detected — looks like you're on a computer. Use Auto Cast and Jig below instead of whipping the phone.",
+      target:'#castControlsRow' },
+    { key:'pick_gear', test:s=> s.signedIn && !s.hasNoGear && s.gearIncomplete,
+      text:"Pick your rod, reel, line, and lure from the dropdowns above — you're missing at least one.",
+      target:'#gearPanel' },
+    { key:'cast', test:()=> !flags.cast,
+      text:"Hold the CAST button, whip your phone forward like a real cast, then let go!",
+      target:'#castBtn' },
+    { key:'fish_on', test:()=> flags.hooked && !flags.landed, target:'#reelWheel', glowOnly:true },
+    { key:'reel', test:()=> flags.cast && !flags.reeled,
+      text:"Turn the reel wheel with a circular motion of your finger to bring your line in.",
+      target:'#reelWheel' },
+    { key:'sensitivity', test:()=> flags.reeled && !flags.sensitivity,
+      text:"Try Reel Sensitivity — Slow is safer on strong fish, Fast brings in an outmatched fish quicker.",
+      target:'#sensSeg' },
+    { key:'icebox_intro', test:()=> flags.landed && !flags.iceboxOpened,
+      text:"Nice catch! Open your Icebox below to see it and sell it for cash.",
+      target:'#iceboxWrap' },
+    { key:'icebox_sell', test:s=> s.iceboxOpen && s.iceboxCount>0 && !flags.sold,
+      text:"Tap Sell on a fish in your icebox to cash it in, or Discard to release it.",
+      target:'#iceboxWrap' },
+    { key:'auto_cast_tip', test:()=> flags.cast && flags.reeled && flags.landed && flags.sold && !flags.autoCast,
+      text:"Tip: don't feel like whipping your phone every time? Auto Cast and Jig below works with no phone motion at all.",
+      target:'#castControlsRow' },
+  ];
+
+  function pickHint(){
+    const s = getState();
+    for(const h of HINTS){ if(h.test(s)) return h; }
+    return null;
+  }
+
+  function refreshHint(){
+    if(!enabled) return;
+    const hint = pickHint();
+    if(!hint){
+      if(currentHintKey){ currentHintKey=null; clearGlow(); }
+      return;
+    }
+    const alreadyShowing = hint.key===currentHintKey && statusEl.classList.contains('tutorial-glow');
+    if(alreadyShowing) return;
+    currentHintKey = hint.key;
+    if(hint.glowOnly) applyGlow(hint.target); else say(hint.text, hint.target);
+  }
+
+  function setFlagsForEvent(eventName){
+    switch(eventName){
+      case 'gear_selected': flags.gearSelected = true; break;
+      case 'cast_performed': flags.cast = true; flags.hooked = false; break;
+      case 'auto_cast_used': flags.autoCast = true; flags.cast = true; flags.hooked = false; break;
+      case 'reeling_performed': flags.reeled = true; break;
+      case 'sensitivity_changed': flags.sensitivity = true; break;
+      case 'fish_hooked': flags.hooked = true; break;
+      case 'fish_landed': flags.landed = true; flags.hooked = false; break;
+      case 'fish_sold': flags.sold = true; break;
+      case 'icebox_opened': flags.iceboxOpened = true; break;
+      case 'cast_attempt_no_motion': flags.noMotion = true; break;
+      default: break; // 'gear_owned_changed' / 'auth_changed' just trigger a live re-check
+    }
+  }
+
+  window.fishOnTutorialEvent = function(eventName){
+    if(!enabled) return;
+    setFlagsForEvent(eventName);
+    refreshHint();
+  };
+  // Called by setStatus() whenever real gameplay text overwrites the coach
+  // box — the tutorial message is gone now, so the highlight should go too.
+  // refreshHint() re-asserts whatever's still relevant at the next hook point.
+  window.fishOnTutorialNotifyRealStatus = function(){
+    if(!enabled) return;
+    currentHintKey = null;
+    clearGlow();
+  };
+
+  // ---- desktop "no motion sensor" detector ----
+  // A one-shot reaction to the user holding the cast button, not a pacing
+  // timer: if no real devicemotion sample has arrived shortly after, this is
+  // almost certainly a desktop/laptop, and "whip your phone" is bad advice.
+  const castBtnEl = document.getElementById('castBtn');
+  if(castBtnEl){
+    castBtnEl.addEventListener('pointerdown', ()=>{
+      if(!enabled || flags.cast || window.__fishOnGotMotionSample) return;
+      setTimeout(()=>{
+        if(!window.__fishOnGotMotionSample && !flags.cast){
+          window.fishOnTutorialEvent('cast_attempt_no_motion');
+        }
+      }, 1200);
+    });
+  }
+
+  // ---- on/off controls ----
+  function setEnabled(v){
+    enabled = v;
+    toggleBtn.setAttribute('aria-pressed', v?'true':'false');
+    toggleState.textContent = v?'On':'Off';
+    if(v){ currentHintKey=null; refreshHint(); }
+    else { clearGlow(); currentHintKey=null; }
+  }
+  async function saveTutorialPref(v){
+    try{ localStorage.setItem('fishOnTutorialEnabled', v?'1':'0'); }catch(e){}
+    const client = window.supabaseClient;
+    if(!client) return;
+    const { data:{session} } = await client.auth.getSession();
+    if(!session || !session.user) return;
+    try{ await client.from('profiles').update({ tutorial_enabled:v }).eq('id', session.user.id); }
+    catch(err){ console.error('Failed to save tutorial preference:', err); }
+  }
+  toggleBtn.addEventListener('click', ()=>{ const v=!enabled; setEnabled(v); saveTutorialPref(v); });
+  closeBtn.addEventListener('click', ()=>{ setEnabled(false); saveTutorialPref(false); });
+
+  window.fishOnLoadTutorialPref = async function(){
+    const client = window.supabaseClient;
+    if(!client) return;
+    const { data:{session} } = await client.auth.getSession();
+    if(!session || !session.user) return;
+    try{
+      const { data } = await client.from('profiles').select('tutorial_enabled').eq('id', session.user.id).maybeSingle();
+      // No row / null value defaults to ON — brand new users get the tutorial automatically.
+      const pref = (data && data.tutorial_enabled===false) ? false : true;
+      setEnabled(pref);
+    }catch(err){ console.error('Failed to load tutorial preference:', err); }
+  };
+
+  // Guests (not signed in yet) respect a locally-remembered choice, default ON.
+  let guestPref = true;
+  try{ const v = localStorage.getItem('fishOnTutorialEnabled'); if(v==='0') guestPref = false; }catch(e){}
+  setEnabled(guestPref);
+})();
 
 </script>
 </body>
